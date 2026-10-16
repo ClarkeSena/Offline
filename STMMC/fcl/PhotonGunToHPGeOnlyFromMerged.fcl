@@ -1,0 +1,13 @@
+# HPGe reference for PhotonGunToHPGeAndLaBrWaveforms.fcl: the merged job with only the HPGe
+# beam, i.e. the PhotonGunToHPGeWaveform.fcl set-up (which needs EmptyStepPointMCs, not built
+# on the gpvm). genLaBr stays configured but is off the path; DigiLaBr runs and sees nothing.
+# Run:  mu2e -c Offline/STMMC/fcl/PhotonGunToHPGeOnlyFromMerged.fcl -n 10000
+# Original author: Sena Clarke
+
+#include "Offline/STMMC/fcl/PhotonGunToHPGeAndLaBrWaveforms.fcl"
+
+process_name : PhotonGunToHPGeOnlyFromMerged
+physics.producers.genCombined.inputTags : [ genHPGe ]
+physics.simulation_path : [ genHPGe, genCombined, g4run, DigiHPGe, DigiLaBr ]
+services.TFileService.fileName : "nts.HPGeOnly.root"
+outputs.fullOutput.fileName : "sim.HPGeOnly.art"

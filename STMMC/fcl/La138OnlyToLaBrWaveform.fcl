@@ -1,0 +1,89 @@
+# La-138 intrinsic activity ALONE (no photon gun) -> Geant4 (EM transport only)
+#   -> LaBr digitization. Use this to validate the intrinsic spectrum in isolation:
+# the combined fcl floods every event with the 1809 keV signal, which swamps/sums with
+# the La-138 features. Here every deposit is purely from a La-138 decay, so the
+# 1468/1436 keV EC peaks and the 789-1052 keV beta continuum appear cleanly.
+# Set activityScale high (e.g. 1000) so most events contain a decay.
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: La138Only
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 100
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Intrinsic La-138 activity, uniform in the crystal volume. activityScale raised so
+    # most events contain a decay (physical ~544 Bq -> ~9e-4 decays/event is too rare).
+    la138 : {
+      module_type : La138Source
+      x : -3863.36
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm (crystal length 76.2 mm)
+      windowTime : 1695.0 # ns - one micropulse, match micropulseTime
+      activityScale : 100 # ~0.09 decays/event: mostly 0 or 1 decay, little pile-up. Run many events.
+      verbosityLevel : 1
+    }
+
+    g4run : @local::g4run
+
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+  }
+
+  simulation_path : [la138, g4run, DigiLaBr]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# Method C: La138Source emits the decay PRODUCTS directly, so no G4 radioactive decay.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+# Only one generator here, so g4run reads it directly (no merger needed).
+physics.producers.g4run.inputs.primaryTag: "la138"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.La138Only.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.La138Only.root"

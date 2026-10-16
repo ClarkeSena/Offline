@@ -1,0 +1,83 @@
+# End-to-end simulation: PhotonGun -> Geant4 -> HPGe digitization -> ADC waveform
+# Fires a photon at the HPGe detector and produces digitized waveforms
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: PhotonGunToHPGeWaveform
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 100
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Stage 1: Generate a photon aimed at the HPGe detector
+    generate : {
+      module_type : PhotonGun
+      x : @local::ComponentPositions.HPGe.x
+      y : @local::ComponentPositions.HPGe.y
+      z : @local::ComponentPositions.HPGe.z
+      E : 1.809 # MeV - 1809 keV Al capture gamma
+    }
+
+    # Stage 2: Propagate the photon through Geant4
+    g4run : @local::g4run
+
+    # Stage 3: Empty collections for the two unused digitizer input channels
+    emptyEle : {
+      module_type : EmptyStepPointMCs
+    }
+    emptyMu : {
+      module_type : EmptyStepPointMCs
+    }
+
+    # Stage 4: HPGe digitization - convert StepPointMCs to ADC waveforms
+    DigiHPGe : {
+      module_type : HPGeWaveformsFromStepPointMCs
+      StepPointMCsTagEle : "emptyEle:"
+      StepPointMCsTagMu : "emptyMu:"
+      StepPointMCsTag1809 : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.HPGe
+      EnergyPerADCBin : @local::HPGeDigitization.EnergyPerADCBin
+      NoiseSD : @local::HPGeDigitization.PreamplifierNoiseSD
+      risingEdgeDecayConstant : @local::HPGeDigitization.DecayConstant
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+  }
+
+  simulation_path : [generate, g4run, emptyEle, emptyMu, DigiHPGe]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path]
+}
+
+# Geant4 configuration
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+
+# Output: keep everything for inspection
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.PhotonGunToHPGeWaveform.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.PhotonGunToHPGeWaveform.root"

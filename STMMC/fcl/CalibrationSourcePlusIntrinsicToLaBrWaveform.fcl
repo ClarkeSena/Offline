@@ -1,0 +1,187 @@
+# Calibration source near the LaBr detector + the crystal's FULL intrinsic activity
+# (La-138 and the Ac-227 alpha chain), all in one spectrum at their true relative rates.
+#
+# This is the simulation to compare with a bench measurement of the real crystal:
+#   - the known source pins the absolute efficiency (transfer standard),
+#   - La-138 is fixed by the crystal volume and composition (or the literature value),
+#   - the Ac-227 chain varies by crystal and is FITTED: its activity sets the rate in the
+#     1.5-2.4 MeV alpha band, alphaQuenchingFactor/Slope set where the alpha peaks sit.
+# analyseCalibrationRates.C prints the rate per feature window for each component, to be
+# compared window by window with the (room-background subtracted) bench spectrum.
+#
+# EDIT THE BenchSetup BLOCK BELOW. Same conventions as CalibrationSourceToLaBrWaveform.fcl:
+#   - identical activityScale on the source and the crystal, or the rate ratio is lost;
+#   - activityScale also inflates pileup, so pileup fractions are only physical at 1;
+#   - the bench lead castle is not in the Mu2e geometry (no Pb X-rays / castle backscatter).
+#
+# Run as:
+#   mu2e -c Offline/STMMC/fcl/CalibrationSourcePlusIntrinsicToLaBrWaveform.fcl
+#   root -l -b -q 'Offline/STMMC/src/analyseCalibrationRates.C("nts.CalibrationSourcePlusIntrinsic.root",100,37000)'
+#
+# Variants:
+#   intrinsic only (bench background run):  BenchSetup.sourceScale : 0
+#   Ac-227 chain only:                       physics.producers.intrinsic.includeLa138 : false
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+BEGIN_PROLOG
+BenchSetup : {
+  # ---- the source ----
+  isotope : "Cs137"        # Cs137, Co60, Na22, Mn54, or custom (then add lineEnergies/lineIntensities)
+  activity : 37000.0       # Bq at the certificate reference date (1 uCi = 37 kBq)
+  elapsedDays : 0.0        # days from the reference date to the bench measurement
+  # ---- where it is ----
+  coordinates : "crystal"  # "crystal": offset from the crystal centre (axis = z, front face
+                           # at z = -38.1); "global": Mu2e coordinates
+  x : 0.0                  # mm
+  y : 0.0                  # mm
+  z : -138.1               # mm: on-axis, 100 mm in front of the front face
+  # ---- the crystal ----
+  ac227ChainActivity : @local::LaBrIntrinsicActivity.ac227Chain  # Bq/cm^3 per member; FIT THIS
+  # ---- statistics ----
+  activityScale : 100.0    # SAME for the source and the crystal
+  sourceScale : 100.0      # normally = activityScale; 0 for an intrinsic-only run
+}
+END_PROLOG
+
+process_name: CalibrationSourcePlusIntrinsic
+
+source : {
+  module_type : EmptyEvent
+  # Livetime = maxEvents * 1695 ns. The Ac-227 chain is ~40 Bq in a 3"x3" crystal, so at
+  # activityScale 100 this gives ~700 chain decays: raise maxEvents for a smooth alpha band.
+  maxEvents : 100000
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # ---- The known source -------------------------------------------------------------
+    calsource : {
+      module_type : CalibrationSource
+      isotope : @local::BenchSetup.isotope
+      activity : @local::BenchSetup.activity
+      elapsedDays : @local::BenchSetup.elapsedDays
+      coordinates : @local::BenchSetup.coordinates
+      x : @local::BenchSetup.x
+      y : @local::BenchSetup.y
+      z : @local::BenchSetup.z
+      windowTime : 1695.0
+      activityScale : @local::BenchSetup.sourceScale
+      emissionMode : "cone"
+      verbosityLevel : 1
+    }
+
+    # ---- The crystal: La-138 + Ac-227 chain --------------------------------------------
+    intrinsic : {
+      module_type : LaBrIntrinsicSource
+      x : -3863.36
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm (crystal length 76.2 mm)
+      windowTime : 1695.0
+      # La-138: computed from composition + volume (~1.454 Bq/cm^3) unless this is uncommented.
+      # la138SpecificActivity : @local::LaBrIntrinsicActivity.la138Literature
+      ac227ChainActivity : @local::BenchSetup.ac227ChainActivity
+      # Out-of-equilibrium fit: Ac227, Th227, Ra223, Rn219, Po215, Pb211, Bi211, Tl207 [Bq/cm^3]
+      # memberSpecificActivities : [0.0136, 0.0158, 0.0127, 0.0125, 0.0125, 0.0136, 0.0136, 0.0136]
+      activityScale : @local::BenchSetup.activityScale
+      verbosityLevel : 1
+    }
+
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : [ "calsource", "intrinsic" ]
+    }
+
+    g4run : @local::g4run
+
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      # Without these the alphas appear at their full 5-7.4 MeV.
+      alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+      alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # Truth pulses tagged 0 = source, 1 = La-138, 2 = Ac-227, light-equivalent energies.
+    TruthPulses : {
+      module_type : LaBrTruthPulses
+      StepPointMCsTag : "g4run:STMDet"
+      micropulseTime : @local::LaBrPileup.micropulseTime
+      alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+      alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+    }
+
+    TagPileup : {
+      module_type : TagPileupPulses
+      STMMCPulsesTag : "TruthPulses"
+      nMerge : 100000    # = source.maxEvents
+      pulseTau2 : @local::LaBrPileup.pulseTau2
+      peakADCPerKeV : @local::LaBrPileup.peakADCPerKeV
+      thresholdADC : @local::LaBrPileup.thresholdADC
+      wBefore : @local::LaBrPileup.wBefore
+      minWindow : @local::LaBrPileup.minWindow
+      makeTTree : true
+    }
+  }
+
+  analyzers : {
+    # Per-event truth spectrum: edepGun (source), edepLa138, edepAc227.
+    TruthLaBr : {
+      module_type : LaBrTruthSpectrum
+      StepPointMCsTag : "g4run:STMDet"
+      alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+      alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+    }
+  }
+
+  simulation_path : [calsource, intrinsic, genCombined, g4run, DigiLaBr, TruthPulses, TagPileup]
+  truth_path : [TruthLaBr]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path, truth_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# All generators emit decay PRODUCTS directly, so G4 radioactive decay stays off.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+physics.producers.g4run.inputs.primaryTag: "genCombined"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.CalibrationSourcePlusIntrinsic.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.CalibrationSourcePlusIntrinsic.root"

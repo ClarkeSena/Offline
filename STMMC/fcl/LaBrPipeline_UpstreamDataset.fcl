@@ -1,0 +1,36 @@
+# Example set-up of the modular LaBr pipeline (see LaBrPipeline.fcl):
+# the particles reaching the STM from an upstream simulation (photons, neutrals, or others
+# resampled from the DumpSTMParticles.fcl tree) as a Poisson process, on top of 1809 keV
+# signal photons at 20 kHz and the crystal's self-activity.
+#
+# Normalisation: emission.nPerEvent = (upstream events per micropulse) x (sampling units per
+# upstream event). With sampleUnit "event", nPerEvent is upstream EVENTS per micropulse, e.g.
+# (POT per micropulse) / (POT per upstream event). Read nEvents from DumpParticles/info.
+# Original author: Sena Clarke
+
+#include "Offline/STMMC/fcl/LaBrPipelineProlog.fcl"
+
+BEGIN_PROLOG
+
+LaBrRun.processName : "LaBrUpstreamDataset"
+LaBrRun.nEvents : 10000
+
+# Signal: 1809 keV photons, Poisson 20 kHz
+LaBrRun.primary : @local::LaBrPipeline.Primary.gun
+LaBrRun.primary.emission : @local::LaBrPipeline.Emission.poisson
+LaBrRun.primary.emission.rateHz : 20000.0
+
+# Upstream background
+LaBrRun.background.dataset.fileName : "nts.STMParticleDump.root"
+LaBrRun.background.dataset.sampleUnit : "event"
+# LaBrRun.background.dataset.pdgIds : [ 2112 ]   # e.g. neutrons only
+LaBrRun.background.emission.nPerEvent : 1.0      # SET from the normalisation above
+
+LaBrRun.sources : [ primary, background, intrinsic ]
+
+LaBrRun.artFile : "sim.LaBrUpstreamDataset.art"
+LaBrRun.histFile : "nts.LaBrUpstreamDataset.root"
+
+END_PROLOG
+
+#include "Offline/STMMC/fcl/LaBrPipelineJob.fcl"

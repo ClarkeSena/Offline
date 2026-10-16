@@ -17,6 +17,12 @@ cet_build_plugin(CountMixedEvents art::module
       Offline::MCDataProducts
 )
 
+cet_build_plugin(EmptyStepPointMCs art::module
+    REG_SOURCE src/EmptyStepPointMCs_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+)
+
 cet_build_plugin(DetectorEfficiency art::module
     REG_SOURCE src/DetectorEfficiency_module.cc
     LIBRARIES REG
@@ -160,6 +166,107 @@ cet_build_plugin(VDResamplerRegeneratePlots art::module
       Offline::GeneralUtilities
       Offline::GlobalConstantsService
       Offline::MachineLearningTools
+      Offline::MCDataProducts
+)
+
+cet_build_plugin(LaBrTruthSpectrum art::module
+    REG_SOURCE src/LaBrTruthSpectrum_module.cc
+    LIBRARIES REG
+      art_root_io::TFileService_service
+      Offline::DataProducts
+      Offline::MCDataProducts
+)
+
+cet_build_plugin(LaBrTruthPulses art::module
+    REG_SOURCE src/LaBrTruthPulses_module.cc
+    LIBRARIES REG
+      Offline::DataProducts
+      Offline::MCDataProducts
+)
+
+cet_build_plugin(TagPileupPulses art::module
+    REG_SOURCE src/TagPileupPulses_module.cc
+    LIBRARIES REG
+      art_root_io::TFileService_service
+      Offline::MCDataProducts
+)
+
+cet_build_plugin(LaBrWaveformsFromStepPointMCsTest art::module
+    REG_SOURCE src/LaBrWaveformsFromStepPointMCsTest_module.cc
+    LIBRARIES REG
+      art_root_io::TFileService_service
+      Offline::DataProducts
+      Offline::MCDataProducts
+      Offline::RecoDataProducts
+)
+
+cet_build_plugin(La138Source art::module
+    REG_SOURCE src/La138Source_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+      Offline::DataProducts
+      Offline::SeedService
+)
+
+cet_build_plugin(LaBrIntrinsicSource art::module
+    REG_SOURCE src/LaBrIntrinsicSource_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+      Offline::DataProducts
+      Offline::SeedService
+)
+
+cet_build_plugin(CalibrationSource art::module
+    REG_SOURCE src/CalibrationSource_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+      Offline::DataProducts
+      Offline::SeedService
+)
+
+cet_build_plugin(GenParticleMerger art::module
+    REG_SOURCE src/GenParticleMerger_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+)
+
+cet_build_plugin(BinaryWaveformWriter art::module
+    REG_SOURCE src/BinaryWaveformWriter_module.cc
+    LIBRARIES REG
+      Offline::RecoDataProducts
+)
+
+cet_build_plugin(PoissonPhotonGun art::module
+    REG_SOURCE src/PoissonPhotonGun_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+      Offline::DataProducts
+      Offline::SeedService
+)
+
+cet_build_plugin(STMGeometryDump art::module
+    REG_SOURCE src/STMGeometryDump_module.cc
+    LIBRARIES REG
+      Offline::GeometryService
+      Offline::STMGeom
+)
+
+cet_build_plugin(STMParticleSource art::module
+    REG_SOURCE src/STMParticleSource_module.cc
+    LIBRARIES REG
+      Offline::MCDataProducts
+      Offline::DataProducts
+      Offline::GlobalConstantsService
+      Offline::SeedService
+      ROOT::Hist
+      ROOT::Tree
+)
+
+cet_build_plugin(STMParticleDump art::module
+    REG_SOURCE src/STMParticleDump_module.cc
+    LIBRARIES REG
+      art_root_io::TFileService_service
+      Offline::GlobalConstantsService
       Offline::MCDataProducts
 )
 

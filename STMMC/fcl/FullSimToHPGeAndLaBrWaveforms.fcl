@@ -1,0 +1,153 @@
+# Full STM simulation feeding BOTH detectors, so the HPGe and LaBr energy spectra can be
+# plotted together from one run.
+#   genHPGe : 1.809 MeV signal gamma fired from the HPGe aperture (z=40404)
+#   genLaBr : 1.809 MeV signal gamma fired from the LaBr aperture (z=40404)
+#   la138   : intrinsic La-138 decay products emitted inside the LaBr crystal (Method C).
+#             La-138 is intrinsic to LaBr3 only; germanium has no lanthanum, so there is
+#             no equivalent intrinsic source for the HPGe.
+#   genCombined : GenParticleMerger concatenates all three into one collection
+#   g4run       : Geant4 EM transport (no radioactive decay; Method C emits products directly)
+#   DigiHPGe / DigiLaBr : the two digitizers, each reading the shared g4run:STMDet collection
+#             and self-selecting its own crystal by the x cut (HPGe keeps x < -3904, LaBr
+#             keeps x > -3925). Each writes a per-ADC-bin TTree; summing chargeCollected over
+#             an event gives that detector's deposited energy (see plotHPGeAndLaBrSpectra.C).
+# Run:  mu2e -c Offline/STMMC/fcl/FullSimToHPGeAndLaBrWaveforms.fcl -n 1000
+# Plot: root -l -b -q 'Offline/STMMC/src/plotHPGeAndLaBrSpectra.C("nts.FullSimHPGeLaBr.root")'
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: FullSimHPGeLaBr
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 1000
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Signal gamma aimed at the HPGe detector (fired along +z from the HPGe aperture).
+    genHPGe : {
+      module_type : PhotonGun
+      x : @local::ComponentPositions.HPGe.x
+      y : @local::ComponentPositions.HPGe.y
+      z : @local::ComponentPositions.HPGe.z
+      E : 1.809 # MeV - 1809 keV Al capture gamma
+    }
+
+    # Signal gamma aimed at the LaBr detector (fired along +z from the LaBr aperture).
+    genLaBr : {
+      module_type : PhotonGun
+      x : @local::ComponentPositions.LaBr.x
+      y : @local::ComponentPositions.LaBr.y
+      z : 40404 # same aperture z as the HPGe, upstream of the SSC shielding
+      E : 1.809 # MeV
+    }
+
+    # Intrinsic La-138 activity, uniform in the LaBr crystal volume (LaBr only).
+    # Geometry values are the empirically-corrected LaBr crystal centre/size.
+    la138 : {
+      module_type : La138Source
+      x : -3863.36
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm (crystal length 76.2 mm)
+      windowTime : 1695.0 # ns - one micropulse, match micropulseTime
+      activityScale : 1000.0 # physical ~540 Bq -> ~9e-4 decays/event; raise to boost stats. Set to 1 for physical normalization.
+      verbosityLevel : 1
+    }
+
+    # Merge all three generators into one collection for g4run.
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : [ "genHPGe", "genLaBr", "la138" ]
+    }
+
+    g4run : @local::g4run
+
+    # HPGe digitization (semiconductor: charge-drift + preamplifier IIR). Reads the shared
+    # STMDet collection and keeps only HPGe-side steps (x < -3904).
+    DigiHPGe : {
+      module_type : HPGeWaveformsFromStepPointMCs
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.HPGe
+      EnergyPerADCBin : @local::HPGeDigitization.EnergyPerADCBin
+      NoiseSD : @local::HPGeDigitization.PreamplifierNoiseSD
+      FanoFactor : @local::HPGeDigitization.FanoFactor
+      risingEdgeDecayConstant : @local::HPGeDigitization.DecayConstant
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # LaBr digitization (scintillator + PMT: photoelectrons + fitted SPE pulse). Reads the
+    # shared STMDet collection and keeps only LaBr-side steps (x > -3925).
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+  }
+
+  analyzers : {
+    # Geant4 truth energy spectrum for the LaBr crystal, split into photon-gun signal vs
+    # La-138 intrinsic (classified by each step's primary start z). LaBr-specific: the
+    # cylinder cut assumes the LaBr crystal's identity rotation; the HPGe crystal is rotated
+    # and bored, so an analogous HPGe truth analyzer is a separate task (see doc).
+    TruthLaBr : {
+      module_type : LaBrTruthSpectrum
+      StepPointMCsTag : "g4run:STMDet"
+      makeStepTree : true   # per-step deposit tree for plotLaBrTruthPositions.C (x-y maps)
+    }
+  }
+
+  simulation_path : [genHPGe, genLaBr, la138, genCombined, g4run, DigiHPGe, DigiLaBr]
+  truth_path : [TruthLaBr]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path, truth_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# Method C: La138Source emits the decay PRODUCTS directly, so no G4 radioactive decay.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+# g4run reads the merged generator collection instead of a single generator
+physics.producers.g4run.inputs.primaryTag: "genCombined"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.FullSimHPGeLaBr.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.FullSimHPGeLaBr.root"

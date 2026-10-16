@@ -1,0 +1,45 @@
+#
+# Headless STM visualization: writes the scene (SSC collimator + LaBr/HPGe crystals + the
+# PhotonGun trajectories) to a VRML file using the VRML2FILE driver. No OpenGL and no display
+# are needed - this is the route to use when X11/OpenGL forwarding to XQuartz does not work
+# (e.g. "glXCreateContext failed"). Copy the resulting .wrl to your Mac and open it in a 3D
+# viewer (view3dscene, MeshLab, ParaView, or Blender) to rotate and screenshot.
+#
+# Driven as g4run.visualization.initMacro by VisSTMBeam.fcl. The output files are named
+# g4_00.wrl, g4_01.wrl, ... in the working directory; with accumulate the highest-numbered
+# file contains every photon drawn so far - that is the one to copy.
+#
+# Original author: Sena Clarke
+
+/control/verbose 0
+/run/verbose 0
+/vis/verbose 1
+
+# Print every graphics system this Geant4 build actually has registered (diagnostic).
+/vis/list
+
+# File-writing driver: no window, no GL, no display.
+/vis/open VRML2FILE
+
+# Build the scene from just the STM pieces (logical-volume names from constructSTM.cc).
+#   TungstenSSCPV - the SSC spot-size collimator (the grey block / "SSC")
+#   fLaBrPV       - the LaBr3:Ce crystal
+#   fHPGePV       - the HPGe crystal (shown for context; this gun aims at LaBr)
+/vis/scene/create
+/vis/scene/add/volume TungstenSSCPV
+/vis/scene/add/volume fLaBrPV
+/vis/scene/add/volume fHPGePV
+/vis/sceneHandler/attach
+
+# Accumulate trajectories over all events so the repeated photons build up in one file.
+/vis/scene/add/trajectories smooth
+/vis/scene/endOfEventAction accumulate 1000
+
+# Colour trajectories by particle (colours are stored in the VRML file): photons yellow
+# (the beam), e-/e+ for the deposits.
+/vis/modeling/trajectories/create/drawByParticleID
+/vis/modeling/trajectories/drawByParticleID-0/set gamma yellow
+/vis/modeling/trajectories/drawByParticleID-0/set e- cyan
+/vis/modeling/trajectories/drawByParticleID-0/set e+ magenta
+
+# Do NOT issue /run/beamOn here; the Mu2eG4 module drives the run and writes a file per event.

@@ -1,0 +1,74 @@
+# Second pass: build the LaBr truth-pulse list from an EXISTING art file, without
+# re-running Geant4. LaBrTruthPulses needs only the StepPointMCs and the SimParticle
+# parent chain, both of which a plain RootOutput already stored, so any job that wrote
+# g4run:STMDet can be reprocessed here.
+#
+# Run as:
+#   mu2e -c Offline/STMMC/fcl/LaBrTruthPulsesFromArt.fcl -s sim.PoissonPhotonGunPlusLa138.art
+#
+# IMPORTANT: process_name must differ from the process name of the input file, and
+# nMerge must equal the number of events in that file (see comment below).
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: TruthPulsesLa138
+
+source : {
+  module_type : RootInput
+}
+
+services : {
+  message : @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Stage 1: one truth pulse per primary, on the absolute concatenated timeline.
+    # The time origin advances by micropulseTime every event whether or not it had a
+    # deposit, so the input file must be read whole and in order.
+    TruthPulses : {
+      module_type : LaBrTruthPulses
+      StepPointMCsTag : "g4run:STMDet"
+      micropulseTime : @local::LaBrPileup.micropulseTime
+    }
+
+    # Stage 2: merge micropulses onto one timeline and tag overlaps.
+    # nMerge must equal the event count of the INPUT file, otherwise the run is split
+    # into disconnected batches and pileup is lost at every boundary.
+    TagPileup : {
+      module_type : TagPileupPulses
+      STMMCPulsesTag : "TruthPulses"
+      nMerge : 10000
+      pulseTau2 : @local::LaBrPileup.pulseTau2
+      peakADCPerKeV : @local::LaBrPileup.peakADCPerKeV
+      thresholdADC : @local::LaBrPileup.thresholdADC
+      wBefore : @local::LaBrPileup.wBefore
+      minWindow : @local::LaBrPileup.minWindow
+      makeTTree : true
+    }
+  }
+
+  truth_path : [TruthPulses, TagPileup]
+  trigger_paths : [truth_path]
+  output_path : [truthOutput]
+  end_paths : [output_path]
+}
+
+outputs : {
+  # Drops the bulky G4 products and keeps only the truth pulses, so this file stays
+  # small next to the input it was made from.
+  truthOutput : {
+    module_type : RootOutput
+    fileName : "sim.LaBrTruthPulses.art"
+    outputCommands : [
+      "drop *_*_*_*",
+      "keep mu2e::STMMCPulses_TagPileup_*_*"
+    ]
+  }
+}
+
+services.TFileService.fileName : "nts.LaBrTruthPulses.root"

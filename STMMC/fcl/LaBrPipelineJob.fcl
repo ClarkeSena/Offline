@@ -1,0 +1,70 @@
+# Job body of the modular LaBr pipeline, driven entirely by the LaBrRun prolog table.
+# Do not run or edit this file: include it LAST from a job file (see LaBrPipeline.fcl).
+#
+#   [LaBrRun.sources] -> genCombined -> g4run -> DigiLaBr -> [LaBrRun.truthProducers]
+#   end path: [LaBrRun.endModules]
+# Original author: Sena Clarke
+
+process_name : @local::LaBrRun.processName
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : @local::LaBrRun.nEvents
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message : @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Generator slots; only those named in LaBrRun.sources are run
+    primary : @local::LaBrRun.primary
+    background : @local::LaBrRun.background
+    intrinsic : @local::LaBrRun.intrinsic
+
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : @local::LaBrRun.sources
+    }
+
+    g4run : @local::g4run
+    DigiLaBr : @local::LaBrPipeline.DigiLaBr
+    TruthPulses : @local::LaBrPipeline.TruthPulses
+    TagPileup : @local::LaBrPipeline.TagPileup
+  }
+
+  analyzers : {
+    TruthLaBr : @local::LaBrPipeline.TruthLaBr
+    BinaryWriter : @local::LaBrPipeline.BinaryWriter
+  }
+
+  simulation_path : [ @sequence::LaBrRun.sources, genCombined, g4run, DigiLaBr, @sequence::LaBrRun.truthProducers ]
+  trigger_paths : [ simulation_path ]
+  end_path : [ @sequence::LaBrRun.endModules ]
+  end_paths : [ end_path ]
+}
+
+# Pileup tagging over the whole run as one timeline, so no pileup is lost at batch edges
+physics.producers.TagPileup.nMerge : @local::LaBrRun.nEvents
+physics.analyzers.BinaryWriter.fileName : @local::LaBrRun.binaryFile
+
+# EM transport only: every generator emits decay PRODUCTS, so G4 radioactive decay stays off
+physics.producers.g4run.physics.physicsListName : "QGSP_BERT_EMZ"
+physics.producers.g4run.physics.turnOnRadioactiveDecay : false
+physics.producers.g4run.SDConfig.enableSD : [ STMDet ]
+physics.producers.g4run.inputs.primaryTag : "genCombined"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : @local::LaBrRun.artFile
+  }
+}
+
+services.SeedService.baseSeed : @local::LaBrRun.baseSeed
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName : @local::LaBrRun.histFile

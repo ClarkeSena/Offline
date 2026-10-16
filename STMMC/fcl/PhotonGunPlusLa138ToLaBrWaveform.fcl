@@ -1,0 +1,115 @@
+# Combined simulation: PhotonGun (signal) + La138Source (intrinsic LaBr activity)
+#   -> GenParticleMerger -> Geant4 (EM transport only) -> LaBr digitization
+# The photon gun fires the 1.809 MeV signal gamma each event; La138Source (Method C)
+# emits the La-138 decay PRODUCTS directly (1436 keV gamma + Ba X-ray for EC; 789 keV
+# gamma + beta for beta-) at the rate set by the crystal's lanthanum content. Geant4
+# transports them, so the intrinsic peaks (1468/1436 keV EC, 789 keV-plus-continuum)
+# appear on top of the signal. No G4 radioactive decay is used. Turn either generator
+# off by removing it from the merger inputTags and the path.
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: PhotonGunPlusLa138
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 100
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    generate : {
+      module_type : PhotonGun
+      x : @local::ComponentPositions.LaBr.x
+      y : @local::ComponentPositions.LaBr.y
+      z : 40404 # Same z as HPGe aperture, upstream of SSC shielding
+      E : 1.809 # MeV - 1809 keV Al capture gamma
+    }
+
+    # Intrinsic La-138 activity, uniform in the crystal volume. Geometry values
+    # are the empirically-corrected LaBr crystal centre/size used by the digitizer.
+    la138 : {
+      module_type : La138Source
+      x : -3863.36
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm (crystal length 76.2 mm)
+      windowTime : 1695.0 # ns - one micropulse, match micropulseTime
+      activityScale : 1000.0 # physical ~540 Bq -> ~9e-4 decays/event; raise to boost stats
+      verbosityLevel : 1
+    }
+
+    # Merge both generators into one collection for g4run
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : [ "generate", "la138" ]
+    }
+
+    g4run : @local::g4run
+
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+  }
+
+  analyzers : {
+    # Geant4 truth energy spectrum, split into photon-gun signal vs La-138 intrinsic
+    # activity by tracing each step to its primary's start position.
+    TruthLaBr : {
+      module_type : LaBrTruthSpectrum
+      StepPointMCsTag : "g4run:STMDet"
+    }
+  }
+
+  simulation_path : [generate, la138, genCombined, g4run, DigiLaBr]
+  truth_path : [TruthLaBr]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path, truth_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# Method C: La138Source emits the decay PRODUCTS directly, so no G4 radioactive decay.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+# g4run reads the merged generator collection instead of a single generator
+physics.producers.g4run.inputs.primaryTag: "genCombined"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.PhotonGunPlusLa138.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.PhotonGunPlusLa138.root"

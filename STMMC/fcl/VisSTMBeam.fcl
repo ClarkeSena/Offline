@@ -1,0 +1,63 @@
+# Interactive 3D visualization of the STM: fires the PhotonGun at the LaBr detector and
+# draws the photon trajectories together with the SSC collimator and the LaBr + HPGe crystals
+# in a Qt OpenGL window you can rotate and screenshot. No digitization or output - this job
+# exists only to render the geometry + generated photons (see Offline/STMMC/vis/visSTMbeam.mac).
+#
+# Run (after `muse setup`; no build needed, only new fcl + macro):
+#   mu2e -c Offline/STMMC/fcl/VisSTMBeam.fcl -n 50
+# Then rotate with the mouse and screenshot, or enable the PNG export in the vis macro.
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: VisSTMBeam
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 50
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # The photon gun you generate: 1.809 MeV gamma fired along +z toward the LaBr crystal.
+    generate : {
+      module_type : PhotonGun
+      x : @local::ComponentPositions.LaBr.x
+      y : @local::ComponentPositions.LaBr.y
+      z : 40404 # aperture z, just downstream of the SSC
+      E : 1.809  # MeV
+    }
+
+    g4run : @local::g4run
+  }
+
+  simulation_path : [generate, g4run]
+  trigger_paths : [simulation_path]
+}
+
+physics.producers.g4run.physics.physicsListName : "QGSP_BERT_EMZ"
+physics.producers.g4run.SDConfig.enableSD : [STMDet]
+
+# Headless: write the STM geometry + photon trajectories to a VRML file (no display/OpenGL).
+# Copy the highest-numbered g4_NN.wrl to your Mac and open it in a 3D viewer to screenshot.
+# (For the live OpenGL window instead, point this at visSTMbeam.mac - needs working X/GLX.)
+physics.producers.g4run.visualization.initMacro : "Offline/STMMC/vis/visSTMbeam_file.mac"
+
+# The default trajectory momentum cut is 50 MeV/c, which would discard the 1.809 MeV photons
+# (and their low-energy secondaries) before they could be drawn. Drop both cuts to 0 so the
+# whole beam and the deposit tracks are visualized.
+physics.producers.g4run.TrajectoryControl.mcTrajectoryMomentumCut   : 0.0
+physics.producers.g4run.TrajectoryControl.saveTrajectoryMomentumCut : 0.0
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20

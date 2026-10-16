@@ -45,7 +45,8 @@ namespace mu2e {
       MuCapProtonGenTool, MuCapDeuteronGenTool, DIOGenTool, MuCapNeutronGenTool, // 48
       MuCapPhotonGenTool, MuCapGammaRayGenTool, CeLeadingLogGenTool, MuplusMichelGenTool,// 52
       gammaPairProduction, antiproton, Mu2eXGenTool, STMDownStreamGenTool,//56
-      lastEnum //57
+      STMLa138, STMAc227, //58
+      lastEnum //59
     };
 
 #ifndef SWIG
@@ -64,7 +65,8 @@ namespace mu2e {
       "CosmicCRY", "pbarFlat","fromAscii","ExternalRMC","InternalRMC","CeLeadingLog", "CosmicCORSIKA", \
     "MuCapProtonGenTool", "MuCapDeuteronGenTool", "DIOGenTool", "MuCapNeutronGenTool", \
       "MuCapPhotonGenTool", "MuCapGammaRayGenTool","CeLeadingLogGenTool","MuplusMichelGenTool", \
-      "gammaPairProduction", "antiproton", "Mu2eXGenTool", "STMDownStreamGenTool"
+      "gammaPairProduction", "antiproton", "Mu2eXGenTool", "STMDownStreamGenTool", \
+      "STMLa138", "STMAc227"
 #endif
 
   public:

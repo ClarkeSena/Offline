@@ -1,0 +1,127 @@
+# Merged HPGe + LaBr simulation: the SAME beam seen by both STM detectors.
+# Clone of PhotonGunToHPGeWaveform.fcl (left untouched) with the LaBr detector added.
+#
+#   genHPGe, genLaBr : the HPGe job's PhotonGun, defined ONCE (MergedBeam below) and fired
+#                      identically at each detector's SSC aperture. The two apertures are
+#                      81 mm apart in x, so one pencil beam cannot reach both crystals; each
+#                      gun is the same beam translated onto its own aperture.
+#   genCombined      : GenParticleMerger, so both photons are one Geant4 event
+#   g4run            : same Geant4 set-up as both standalone jobs (QGSP_BERT_EMZ, STMDet)
+#   DigiHPGe         : as in PhotonGunToHPGeWaveform.fcl, minus its two empty Ele/Mu inputs
+#                      (EmptyStepPointMCs is not built on the gpvm; empty collections add no
+#                      charge and draw no random numbers, so the output is unchanged)
+#   DigiLaBr         : @local::LaBrPipeline.DigiLaBr, i.e. exactly the LaBrPipeline.fcl digitizer
+#   TruthLaBr        : @local::LaBrPipeline.TruthLaBr, as in LaBrPipeline.fcl
+# Both digitizers read the shared g4run:STMDet and keep only their own crystal (x cut).
+#
+# Comparable by construction: module labels, TTree paths (DigiHPGe/ttree, DigiLaBr/ttree,
+# TruthLaBr/*), seeds and detector parameters match the standalone jobs, so every existing
+# macro (plotLaBrWaveform.C, compareLaBrSpectra.C, plotHPGeAndLaBrSpectra.C) reads this file.
+# MergedRun.beams switches either beam off:
+#   [genHPGe]          -> should reproduce PhotonGunToHPGeWaveform.fcl bin for bin (wiring check)
+#   [genHPGe, genLaBr] -> both detectors; agreement with the standalone jobs is statistical only
+#                         (the two photons share one Geant4 random stream), and any photon that
+#                         scatters from one detector into the other shows up as a difference.
+#
+# Run:     mu2e -c Offline/STMMC/fcl/PhotonGunToHPGeAndLaBrWaveforms.fcl -n 10000
+# Compare: root -l -b -q 'Offline/STMMC/src/compareMergedHPGeLaBr.C("nts.PhotonGunToHPGeAndLaBrWaveforms.root","nts.PhotonGunToHPGeWaveform.root","nts.LaBrPipeline.root")'
+# Original author: Sena Clarke
+
+# Pulls in minimalMessageService, standardProducers, standardServices and STMMC prolog.fcl,
+# the same includes as PhotonGunToHPGeWaveform.fcl, plus the LaBrPipeline building blocks
+#include "Offline/STMMC/fcl/LaBrPipelineProlog.fcl"
+
+BEGIN_PROLOG
+
+# The beam, as in PhotonGunToHPGeWaveform.fcl. Only x differs between the two guns.
+MergedBeam : {
+  module_type : PhotonGun
+  y : @local::ComponentPositions.HPGe.y
+  z : @local::ComponentPositions.HPGe.z # 40404, also the LaBr gun z in LaBrPipeline.fcl
+  E : 1.809 # MeV - 1809 keV Al capture gamma
+}
+
+MergedRun : {
+  beams : [ genHPGe, genLaBr ] # which detectors are illuminated
+}
+
+END_PROLOG
+
+process_name: PhotonGunToHPGeAndLaBrWaveforms
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 100
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # Stage 1: the same photon aimed at each detector's aperture
+    genHPGe : {
+      @table::MergedBeam
+      x : @local::ComponentPositions.HPGe.x
+    }
+    genLaBr : {
+      @table::MergedBeam
+      x : @local::ComponentPositions.LaBr.x
+    }
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : @local::MergedRun.beams
+    }
+
+    # Stage 2: Propagate both photons through Geant4 in one event
+    g4run : @local::g4run
+
+    # Stage 3a: HPGe digitization, as PhotonGunToHPGeWaveform.fcl without the empty Ele/Mu inputs
+    DigiHPGe : {
+      module_type : HPGeWaveformsFromStepPointMCs
+      StepPointMCsTag1809 : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.HPGe
+      EnergyPerADCBin : @local::HPGeDigitization.EnergyPerADCBin
+      NoiseSD : @local::HPGeDigitization.PreamplifierNoiseSD
+      risingEdgeDecayConstant : @local::HPGeDigitization.DecayConstant
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # Stage 3b: LaBr digitization, identical to LaBrPipeline.fcl
+    DigiLaBr : @local::LaBrPipeline.DigiLaBr
+  }
+
+  analyzers : {
+    TruthLaBr : @local::LaBrPipeline.TruthLaBr
+  }
+
+  simulation_path : [ @sequence::MergedRun.beams, genCombined, g4run, DigiHPGe, DigiLaBr ]
+  trigger_paths : [simulation_path]
+  output_path : [TruthLaBr, fullOutput]
+  end_paths : [output_path]
+}
+
+# Geant4 configuration, as in both standalone jobs
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+# g4run reads the merged generator collection instead of a single generator
+physics.producers.g4run.inputs.primaryTag: "genCombined"
+
+# Output: keep everything for inspection
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.PhotonGunToHPGeAndLaBrWaveforms.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.PhotonGunToHPGeAndLaBrWaveforms.root"

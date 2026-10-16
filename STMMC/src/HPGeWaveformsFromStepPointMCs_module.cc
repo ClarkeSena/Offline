@@ -17,6 +17,7 @@
 #include "art/Framework/Core/EDProducer.h"
 #include "art/Framework/Principal/Event.h"
 #include "art/Framework/Principal/Handle.h"
+#include "art/Framework/Services/Registry/ServiceHandle.h"
 
 // CLHEP includes
 #include "CLHEP/Vector/ThreeVector.h"
@@ -36,14 +37,19 @@
 
 // Offline includes
 // #include "Offline/DataProducts/inc/STMChannel.hh"
+#include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/MCDataProducts/inc/StepPointMC.hh"
 // #include "Offline/Mu2eUtilities/inc/STMUtils.hh"
 // #include "Offline/ProditionsService/inc/ProditionsHandle.hh"
 #include "Offline/RecoDataProducts/inc/STMWaveformDigi.hh"
+#include "Offline/STMGeom/inc/HPGeDetector.hh"
+#include "Offline/STMGeom/inc/STM.hh"
 // #include "Offline/STMConditions/inc/STMEnergyCalib.hh"
 
 // ROOT includes
 #include "art_root_io/TFileService.h"
+#include "TH1D.h"
+#include "TH2D.h"
 #include "TTree.h"
 
 
@@ -53,12 +59,15 @@ namespace mu2e {
     using Name=fhicl::Name;
     using Comment=fhicl::Comment;
     struct Config {
-      fhicl::Atom<art::InputTag> StepPointMCsTagEle{ Name("StepPointMCsTagEle"), Comment("InputTag for StepPointMCs derived from EleBeamCat")};
-      fhicl::Atom<art::InputTag> StepPointMCsTagMu{ Name("StepPointMCsTagMu"), Comment("InputTag for StepPointMCs derived from MuBeamCat")};
-      fhicl::Atom<art::InputTag> StepPointMCsTag1809{ Name("StepPointMCsTag1809"), Comment("InputTag for StepPointMCs derived from TargetStopsCat")};
+      fhicl::OptionalAtom<art::InputTag> StepPointMCsTagEle{ Name("StepPointMCsTagEle"), Comment("InputTag for StepPointMCs derived from EleBeamCat")};
+      fhicl::OptionalAtom<art::InputTag> StepPointMCsTagMu{ Name("StepPointMCsTagMu"), Comment("InputTag for StepPointMCs derived from MuBeamCat")};
+      fhicl::OptionalAtom<art::InputTag> StepPointMCsTag1809{ Name("StepPointMCsTag1809"), Comment("InputTag for StepPointMCs derived from TargetStopsCat")};
+      fhicl::OptionalAtom<art::InputTag> StepPointMCsTag{ Name("StepPointMCsTag"), Comment("InputTag for StepPointMCs from an arbitrary source (e.g. photon gun)")};
+
       fhicl::Atom<double> fADC{ Name("fADC"), Comment("ADC operating frequency [MHz}")};
       fhicl::Atom<double> ADCToEnergy {Name("EnergyPerADCBin"), Comment("ADC energy calibration [keV/bin]")};
       fhicl::Atom<double> noiseSD {Name("NoiseSD"), Comment("Standard deviation of ADC noise [mV]. Set this to 0.0 for the ideal case.")};
+      fhicl::OptionalAtom<double> fanoFactor{ Name("FanoFactor"), Comment("Fano factor for statistical fluctuations in e-h pair creation (dimensionless). Set to 0.0 to disable. Ge ~ 0.1.")};
       fhicl::Atom<double> risingEdgeDecayConstant{ Name("risingEdgeDecayConstant"), Comment("Rising edge decay time [us]")};
       fhicl::OptionalAtom<int> microspillBufferLengthCount{ Name("microspillBufferLengthCount"), Comment("Number of microspills to buffer ahead for, in number of microspills")};
       fhicl::OptionalAtom<bool> makeTTree{ Name("makeTTree"), Comment("Controls whether to make the TTree with branches chargeCollected, chargeDecayed, ADC, eventId, time")};
@@ -71,16 +80,19 @@ namespace mu2e {
   private:
     void produce(art::Event& event) override;
     void beginJob();
+    void beginRun(art::Run& run) override;
+    void endJob() override;
     void depositCharge(const StepPointMC& step);
     void decayCharge();
     void addNoise();
     void digitize();
 
     // fhicl variables
-    art::ProductToken<StepPointMCCollection> StepPointMCsTokenEle, StepPointMCsTokenMu, StepPointMCsToken1809;  // Token of StepPointMCs in STMDet
+    std::vector<art::InputTag> StepPointMCsTags;  // All input tags to read StepPointMCs from
     double fADC = 0;                                                                                            // ADC sampling frequency [MHz]
     double ADCToEnergy = 0;                                                                                     // Calibration of bin width to energy [keV/bin]
     double noiseSD = 0;                                                                                         // Standard deviation of ADC noise [mV]
+    double fanoFactor = 0.0;                                                                                    // Fano factor for e-h pair creation statistics (dimensionless)
     double risingEdgeDecayConstant = 0;                                                                         // [us]
     bool makeTTree = false;                                                                                     // Controls whether an analysis TTree is made
     double timeOffset = 0.0;                                                                                    // Used for debugging [ns]
@@ -105,9 +117,12 @@ namespace mu2e {
     uint32_t eventTimeBuffer = 0;                                                                               // Multiple of event ids to store
 
     // Define Ge crystal properties [mm]
-    const double crystalCentreX = -3973.81;                                                                     // Crystal centre x position [mm]
+    // Crystal centre in Mu2e coords, derived from constructSTM.cc printout (2026-04-20).
+    // Previous values (-3973.81, 0, 40699.1) were ~87 mm off in z and 12 mm off in x,
+    // causing 99% of in-crystal steps to miss the envelope check.
+    const double crystalCentreX = -3986.30;                                                                     // Crystal centre x position [mm]
     const double crystalCentreY = 0;                                                                            // Crystal centre y position [mm]
-    const double crystalCentreZ = 40699.1;                                                                      // Crystal centre z position [mm]
+    const double crystalCentreZ = 40612.70;                                                                     // Crystal centre z position [mm]
     CLHEP::Hep3Vector crystalCentrePosition;                                                                    // Crystal centre position vector
     // TODO - want to initialize hpgeEndcapCenterPosition and holeHemisphereCenter as consts here, but errors thrown
     CLHEP::Hep3Vector hitPosition;
@@ -148,12 +163,43 @@ namespace mu2e {
     uint32_t time = 0;                                                                                          // used to fill the ttree
     int16_t ttreeADC = 0;                                                                                       // used to fill the ttree
 
+    // Diagnostic histograms of step world positions, filled in depositCharge
+    TH2D* hStepXZ_pass = nullptr;     // steps that pass crystal-envelope bounds
+    TH2D* hStepXZ_reject = nullptr;   // steps rejected by bounds
+    TH1D* hStepR_pass = nullptr;      // crystal-local R, passing
+    TH1D* hStepR_reject = nullptr;    // crystal-local R, rejected
+    TH1D* hStepZ_pass = nullptr;      // crystal-local Z, passing
+    TH1D* hStepZ_reject = nullptr;    // crystal-local Z, rejected
+
+    // Diagnostic counters (written to stdout at endJob)
+    uint64_t n_events_seen = 0;
+    uint64_t n_steps_total = 0;             // all StepPointMCs seen
+    uint64_t n_steps_zero_edep = 0;         // ionizingEdep == 0, skipped before depositCharge
+    uint64_t n_steps_to_deposit = 0;        // reached depositCharge
+    uint64_t n_reject_xcut = 0;             // hitPosition.x() > -3904 (LaBr side)
+    uint64_t n_reject_timecut = 0;          // step.time() > buffer window
+    uint64_t n_reject_bounds = 0;           // hitZ/hitR outside crystal envelope
+    uint64_t n_deposit_ok = 0;              // charge actually deposited
+
     // Data storage vectors
     std::vector<double> _charge;                                                                                // Buffer to store charge collected from STMDet StepPointMCs
     std::vector<double> _chargeCollected;                                                                       // Buffer to store charge collected from STMDet StepPointMCs in the given time step
     std::vector<double> _chargeDecayed;                                                                         // Buffer to store charge collected that decays over time
     std::vector<double> _chargeCarryOver;                                                                       // Temporary buffer that will store _chargeCollected over the course of the next event
     std::vector<int16_t> _adcs;                                                                                 // Buffer for storing the ADC values to put into the STMWaveformDigi
+
+    // Random engine + unit-Gaussian distribution. Uses std::default_random_engine instead of
+    // SeedService because SeedService fails to link from STMMC modules (same workaround as the
+    // LaBr digitizer). Constructed once as a member so the stream advances across the run
+    // rather than being re-seeded identically per event.
+    std::default_random_engine _randomGen;
+    std::normal_distribution<double> _noiseGauss{0.0, 1.0};
+
+    // Crystal rotation loaded from GeomService in beginRun.
+    // Used in depositCharge() to transform world -> crystal-local coordinates.
+    // Falls back to rotateY(-45 deg) if GeomService is unavailable.
+    CLHEP::HepRotation crystalRotation_;
+    bool crystalRotationLoaded_ = false;
 
     // Offline utilities
     // TODO: include the prodition to get the sampling frequency
@@ -164,14 +210,17 @@ namespace mu2e {
 
   HPGeWaveformsFromStepPointMCs::HPGeWaveformsFromStepPointMCs(const Parameters& conf)
     : art::EDProducer{conf},
-      StepPointMCsTokenEle(consumes<StepPointMCCollection>(conf().StepPointMCsTagEle())),
-      StepPointMCsTokenMu(consumes<StepPointMCCollection>(conf().StepPointMCsTagMu())),
-      StepPointMCsToken1809(consumes<StepPointMCCollection>(conf().StepPointMCsTag1809())),
       fADC(conf().fADC()),
       ADCToEnergy(conf().ADCToEnergy()),
       noiseSD(conf().noiseSD()),
       risingEdgeDecayConstant(conf().risingEdgeDecayConstant()) {
-        produces<STMWaveformDigiCollection>();
+        produces<STMWaveformDigiCollection>("HPGe");
+        // Collect all configured input tags
+        art::InputTag tag;
+        if (conf().StepPointMCsTagEle(tag)) { mayConsume<StepPointMCCollection>(tag); StepPointMCsTags.push_back(tag); }
+        if (conf().StepPointMCsTagMu(tag))  { mayConsume<StepPointMCCollection>(tag); StepPointMCsTags.push_back(tag); }
+        if (conf().StepPointMCsTag1809(tag)){ mayConsume<StepPointMCCollection>(tag); StepPointMCsTags.push_back(tag); }
+        if (conf().StepPointMCsTag(tag))    { mayConsume<StepPointMCCollection>(tag); StepPointMCsTags.push_back(tag); }
         if (defaultMicrospillBufferLengthCount < 2)
           throw cet::exception("RANGE", "defaultMicrospillBufferLengthCount has to be more than 1\n");
 
@@ -181,7 +230,7 @@ namespace mu2e {
         // Assign optional variables
         microspillBufferLengthCount = conf().microspillBufferLengthCount() ? *(conf().microspillBufferLengthCount()) : defaultMicrospillBufferLengthCount;
         verbosityLevel = conf().verbosityLevel() ? *(conf().verbosityLevel()) : 0;
-
+        fanoFactor = conf().fanoFactor() ? *(conf().fanoFactor()) : 0.0;
         // Determine the number of ADC values in each STMWaveformDigi. Increase the number by one due to truncation. At 320MHz, this will be 543 ADC values per microbunch
         double _nADCs = (micropulseTime/tADC) + 1;
         nADCs = (int) _nADCs;
@@ -218,6 +267,24 @@ namespace mu2e {
         };
 
         resetEventNumber = conf().resetEventNumber() ? *(conf().resetEventNumber()) : 0;
+
+        // Diagnostic histograms of step world positions, always booked
+        art::ServiceHandle<art::TFileService> tfs;
+        art::TFileDirectory diag = tfs->mkdir("HPGeDigiDiag");
+        hStepXZ_pass   = diag.make<TH2D>("hStepXZ_pass",
+                                         "Step world (x,z) passing crystal bounds;x [mm];z [mm]",
+                                         200, -4050, -3850, 400, 40550, 40850);
+        hStepXZ_reject = diag.make<TH2D>("hStepXZ_reject",
+                                         "Step world (x,z) rejected by crystal bounds;x [mm];z [mm]",
+                                         200, -4050, -3850, 400, 40550, 40850);
+        hStepR_pass    = diag.make<TH1D>("hStepR_pass",
+                                         "Crystal-local R (pass);R [mm];steps", 200, 0, 100);
+        hStepR_reject  = diag.make<TH1D>("hStepR_reject",
+                                         "Crystal-local R (reject);R [mm];steps", 200, 0, 200);
+        hStepZ_pass    = diag.make<TH1D>("hStepZ_pass",
+                                         "Crystal-local Z (pass);Z [mm];steps", 200, -20, 100);
+        hStepZ_reject  = diag.make<TH1D>("hStepZ_reject",
+                                         "Crystal-local Z (reject);Z [mm];steps", 400, -200, 200);
       };
 
   void HPGeWaveformsFromStepPointMCs::beginJob() {
@@ -227,6 +294,7 @@ namespace mu2e {
       std::cout << std::left << "\t\t" << std::setw(60) << "fAD [MHz]"                            << fADC                                     << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "EnergyPerADCBin [keV/bin]"            << ADCToEnergy                              << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "NoiseSD [mV]"                         << noiseSD /(1e-3 * feedbackCapacitance/_e) << std::endl;
+      std::cout << std::left << "\t\t" << std::setw(60) << "FanoFactor"                           << fanoFactor                               << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "risingEdgeDecayConstant [us]"         << risingEdgeDecayConstant                  << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "microspillBufferLengthCount"          << microspillBufferLengthCount              << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "makeTTree"                            << makeTTree                                << std::endl;
@@ -247,26 +315,77 @@ namespace mu2e {
     };
   };
 
+  void HPGeWaveformsFromStepPointMCs::beginRun(art::Run&) {
+    // Query the actual crystal placement from GeometryService so we can compare
+    // to the hard-coded crystalCentreX/Y/Z constants. If these disagree, the
+    // crystal-local R/Z bounds check in depositCharge will be wrong.
+    try {
+      GeomHandle<STM> stm;
+      HPGeDetector const* hpge = stm->getHPGeDetectorPtr();
+      if (hpge) {
+        CLHEP::Hep3Vector actual = hpge->originInMu2e();
+        CLHEP::HepRotation const& rot = hpge->rotation();
+        // NOTE: HPGeDetector::originInMu2e() is the endcap/envelope origin,
+        // NOT the crystal centre. The crystal centre is offset along the
+        // rotated +z axis by (WindowD + AirD + CapsuleWindowthick + CrystalL/2).
+        // Leaving the hardcoded crystalCentrePosition in place; using this as
+        // a diagnostic only until we add a helper to HPGeDetector that returns
+        // the crystal centre directly.
+        crystalRotation_ = rot;
+        crystalRotationLoaded_ = true;
+        std::cout << "===== HPGe geometry check =====" << std::endl;
+        std::cout << "  GeomService origin (mm): (" << actual.x() << ", "
+                  << actual.y() << ", " << actual.z() << ")" << std::endl;
+        std::cout << "  Hardcoded    origin (mm): (" << crystalCentreX << ", "
+                  << crystalCentreY << ", " << crystalCentreZ << ")" << std::endl;
+        std::cout << "  Delta (GeomService - hardcoded) (mm): ("
+                  << actual.x() - crystalCentreX << ", "
+                  << actual.y() - crystalCentreY << ", "
+                  << actual.z() - crystalCentreZ << ")" << std::endl;
+        std::cout << "  GeomService rotation matrix:" << std::endl;
+        std::cout << "    [" << rot.xx() << ", " << rot.xy() << ", " << rot.xz() << "]" << std::endl;
+        std::cout << "    [" << rot.yx() << ", " << rot.yy() << ", " << rot.yz() << "]" << std::endl;
+        std::cout << "    [" << rot.zx() << ", " << rot.zy() << ", " << rot.zz() << "]" << std::endl;
+        std::cout << "  GeomService CrystalL, CrystalR (mm): "
+                  << hpge->CrystalL() << ", " << hpge->CrystalR() << std::endl;
+        std::cout << "  Hardcoded    crystalL, crystalR (mm): "
+                  << crystalL << ", " << crystalR << std::endl;
+        std::cout << "===============================" << std::endl;
+      } else {
+        std::cout << "HPGe geometry check: getHPGeDetectorPtr returned null" << std::endl;
+      }
+    } catch (std::exception const& e) {
+      std::cout << "HPGe geometry check failed: " << e.what() << std::endl;
+    }
+  };
+
   void HPGeWaveformsFromStepPointMCs::produce(art::Event& event) {
     eventId = event.id().event();
-    // Get the hits in the detector
-    std::vector<StepPointMC> StepsEle = event.getProduct(StepPointMCsTokenEle);
-    std::vector<StepPointMC> StepsMu = event.getProduct(StepPointMCsTokenMu);
-    std::vector<StepPointMC> Steps1809 = event.getProduct(StepPointMCsToken1809);
-
-    // Add a collection of charge depositions to _charge
-    for(const StepPointMC& step : StepsEle){
-      if (step.ionizingEdep() != 0)
+    ++n_events_seen;
+    uint64_t steps_this_event = 0, deposit_this_event = 0;
+    // Get the hits from all configured input tags and deposit charge
+    for (const auto& tag : StepPointMCsTags) {
+      art::Handle<StepPointMCCollection> handle;
+      event.getByLabel(tag, handle);
+      if (!handle.isValid()) continue;
+      for (const StepPointMC& step : *handle) {
+        ++n_steps_total;
+        ++steps_this_event;
+        if (step.ionizingEdep() != 0) {
+          ++n_steps_to_deposit;
+          uint64_t before_ok = n_deposit_ok;
           depositCharge(step);
-    };
-    for(const StepPointMC& step : StepsMu){
-      if (step.ionizingEdep() != 0)
-          depositCharge(step);
-    };
-    for(const StepPointMC& step : Steps1809){
-      if (step.ionizingEdep() != 0)
-          depositCharge(step);
-    };
+          if (n_deposit_ok > before_ok) ++deposit_this_event;
+        } else {
+          ++n_steps_zero_edep;
+        }
+      }
+    }
+    if (verbosityLevel > 1 && steps_this_event > 0) {
+      std::cout << "HPGeDigi event " << eventId
+                << " steps=" << steps_this_event
+                << " deposited=" << deposit_this_event << std::endl;
+    }
 
     // Decay all of the collected charges
     decayCharge();
@@ -326,7 +445,7 @@ namespace mu2e {
     std::fill(_adcs.begin(), _adcs.end(), 0);
 
     // Add the STMWaveformDigi to the event
-    event.put(std::move(outputDigis));
+    event.put(std::move(outputDigis), "HPGe");
     return;
   };
 
@@ -336,31 +455,57 @@ namespace mu2e {
 
     hitPosition = step.position();
     // Only take the StepPoinMCs in the HPGe detector. STMDet is both sensitive volume of both the HPGe and LaBr.
-    if (hitPosition.x() > -3904)
+    if (hitPosition.x() > -3904) {
+      ++n_reject_xcut;
       return;
+    }
     // If the time is outside the buffer time, skip it
-    if (step.time() > (microspillBufferLengthCount * micropulseTime))
+    if (step.time() > (microspillBufferLengthCount * micropulseTime)) {
+      ++n_reject_timecut;
       return;
+    }
 
-    // Tranform the co-ordinate system to be a cylinder in the +z direction
-    // Shift the position to a local cylindrical co-ordinate system with the center of the crystal at the origin
+    // Transform world position into crystal-local coordinates.
+    // Shift to crystal-centre origin, then apply inverse of the crystal rotation
+    // (rotateY(-45 deg) per GeomService) so the crystal axis points along +z.
+    // The original rotateY(+45) was wrong: it applied the forward rotation instead
+    // of the inverse, mirroring the crystal envelope relative to HPGeTree.
+    // Falls back to rotateY(-45 deg) if GeomService was unavailable in beginRun.
     hitPosition -= crystalCentrePosition;
-    // Rotate the cylinder for the axis to point in the +z direction
-    hitPosition.rotateY(45.0*CLHEP::degree);
-    // Shift the crystal so the front of the crystal is the start
+    if (crystalRotationLoaded_) {
+      hitPosition = crystalRotation_.inverse() * hitPosition;
+    } else {
+      hitPosition.rotateY(-45.0*CLHEP::degree);
+    }
+    // Shift so the front face of the crystal is at z=0
     hitPosition.setZ(hitPosition.z() + (crystalL/2));
 
     // Redefine the hit direction.
     hitR = hitPosition.perp();
     hitZ = hitPosition.z();
 
-    // Run checks
-    if (hitZ < -stepPositionTolerance)
-      throw cet::exception("LogicError") << "Step not inside HPGe detector, z position negative: " << hitZ << "\n";
-    if (hitZ > maxZ)
-      throw cet::exception("LogicError") << "Step not inside HPGe detector, z position greater than the crystal length: " << hitZ << ", should be in range [0, " << maxZ << "]\n";
-    if (hitR > maxR)
-      throw cet::exception("LogicError") << "Step not inside HPGe detector, radius outside of crystal: " << hitR << ", should be in range [0, " << maxR << "].\n";
+    // Run checks: reject steps outside the outer crystal envelope or inside the bore hole.
+    // In the cylindrical region (hitZ > crystalHoleZStart) the bore is at R < crystalHoleR;
+    // steps there are in the dead bore volume and electronTravelDistance would go negative.
+    const bool outsideOuter = (hitZ < -stepPositionTolerance || hitZ > maxZ || hitR > maxR);
+    const bool insideBore   = (hitZ > crystalHoleZStart && hitR < crystalHoleR - stepPositionTolerance);
+    if (outsideOuter || insideBore) {
+      ++n_reject_bounds;
+      if (hStepXZ_reject) hStepXZ_reject->Fill(step.position().x(), step.position().z());
+      if (hStepR_reject)  hStepR_reject->Fill(hitR);
+      if (hStepZ_reject)  hStepZ_reject->Fill(hitZ);
+      if (n_reject_bounds <= 20) {
+        std::cout << "HPGeDigi bounds-reject #" << n_reject_bounds
+                  << " world=" << step.position()
+                  << " local(R,Z)=(" << hitR << "," << hitZ << ")"
+                  << " maxR=" << maxR << " maxZ=" << maxZ
+                  << (insideBore ? " [inside bore]" : "") << std::endl;
+      }
+      return;
+    }
+    if (hStepXZ_pass) hStepXZ_pass->Fill(step.position().x(), step.position().z());
+    if (hStepR_pass)  hStepR_pass->Fill(hitR);
+    if (hStepZ_pass)  hStepZ_pass->Fill(hitZ);
 
     // Both electrons and holes will travel radially in all cases, but the model volume topology is different depending on the step point position
     if (hitZ > crystalHoleZStart) { // Volume is a cylinder
@@ -394,15 +539,33 @@ namespace mu2e {
       R2 = electronTravelDistance + holeTravelDistance + crystalHoleR + stepPositionTolerance * 2;
     };
 
-    if (holeTravelDistance < 0 || electronTravelDistance < 0)
-      throw cet::exception("LogicError") << "Electron (" << electronTravelDistance << ") and hole (" << holeTravelDistance << ") travelling distances should both be positve.\nPosition found at " << step.position() << "(" << hitPosition << ")\n";
+    if (holeTravelDistance < 0 || electronTravelDistance < 0) {
+      ++n_reject_bounds;
+      if (n_reject_bounds <= 20) {
+        std::cout << "HPGeDigi drift-reject #" << n_reject_bounds
+                  << " world=" << step.position()
+                  << " local=(" << hitPosition << ")"
+                  << " eDist=" << electronTravelDistance
+                  << " hDist=" << holeTravelDistance << std::endl;
+      }
+      return;
+    }
 
     // Calculate the drift times
     electronTravelTime = electronTravelDistance / electronDriftVelocity;
     holeTravelTime = holeTravelDistance / holeDriftVelocity;
 
     // Calcuate the number of eh pairs from the ionizing energy deposition.
-    N_ehPairs = -1.0 * step.ionizingEdep() * 1e6 / epsilonGe; // 1e6 converts MeV to eV. -1.0 as this is a decreasing peak
+    // Apply Fano-factor fluctuation: the number of e-h pairs created from a
+    // given energy deposit has variance F*N rather than N (Poisson), where F
+    // is the Fano factor (~0.1 for Ge). The per-step fluctuations sum in
+    // quadrature, so the total variance over all steps equals F*N_total as
+    // required. _noiseGauss fires a unit-Gaussian draw from the same seeded
+    // engine used for electronic noise.
+    double N_mean = step.ionizingEdep() * 1e6 / epsilonGe; // 1e6 converts MeV to eV
+    if (fanoFactor > 0.0 && N_mean > 0.0)
+      N_mean += _noiseGauss(_randomGen) * std::sqrt(fanoFactor * N_mean);
+    N_ehPairs = -1.0 * N_mean; // -1.0 as this is a decreasing peak
 
     // Define parameters required for charge deposition. Constants A and B are defined here for code brevity
     uint tIndex = (step.time() + timeOffset) / tADC, tIndexStart = tIndex;
@@ -449,7 +612,21 @@ namespace mu2e {
 
     // Clear the charge vector
     std::fill(_charge.begin(), _charge.end(), 0);
+    ++n_deposit_ok;
     return;
+  };
+
+  void HPGeWaveformsFromStepPointMCs::endJob() {
+    std::cout << "===== HPGeWaveformsFromStepPointMCs loss breakdown =====" << std::endl;
+    std::cout << "  events seen                : " << n_events_seen     << std::endl;
+    std::cout << "  steps total                : " << n_steps_total     << std::endl;
+    std::cout << "  steps with ionizingEdep==0 : " << n_steps_zero_edep << std::endl;
+    std::cout << "  steps reaching depositCharge: " << n_steps_to_deposit << std::endl;
+    std::cout << "    rejected: x > -3904 (LaBr): " << n_reject_xcut     << std::endl;
+    std::cout << "    rejected: step.time > buf : " << n_reject_timecut  << std::endl;
+    std::cout << "    rejected: out-of-bounds   : " << n_reject_bounds   << std::endl;
+    std::cout << "  deposits successful        : " << n_deposit_ok      << std::endl;
+    std::cout << "========================================================" << std::endl;
   };
 
   void HPGeWaveformsFromStepPointMCs::decayCharge() {
@@ -464,11 +641,12 @@ namespace mu2e {
     if (noiseSD < std::numeric_limits<double>::epsilon())
       return;
 
-    // Add the noise in multiples of the fundamental charge
-    std::default_random_engine _randomGen;
-    std::normal_distribution<double> _noiseDistribution(0.0, noiseSD);
+    // Draw Gaussian noise per sample from the std::default_random_engine.
+    // _noiseGauss has unit variance; multiply by noiseSD to get the
+    // configured noise amplitude (in the same charge-carrier units as
+    // _chargeDecayed after the mV->charge conversion in the constructor).
     for (size_t _i = 0; _i < nADCs; _i++)
-      _chargeDecayed[_i] += _noiseDistribution(_randomGen);
+      _chargeDecayed[_i] += noiseSD * _noiseGauss(_randomGen);
     return;
   };
 
