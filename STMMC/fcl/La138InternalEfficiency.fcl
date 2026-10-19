@@ -1,0 +1,80 @@
+# La-138 internal full-absorption efficiency of the LaBr crystal.
+#
+# Generates La-138 decays only, uniform in the crystal (LaBrIntrinsicSource, Ac-227 chain
+# off), and records the Geant4 truth deposit of each decay (TruthLaBr/decays). No digitizer,
+# no art output. la138InternalEfficiency.C then gives
+#   eps_int = N(EC sum peak window) / (N_La138 decays * ecFraction)
+# and the simulated EC peak rate, to compare with the bench measurement
+# (labrSelfActivity.py: R_EC = 63.4 +- 0.7 counts/s, run 125382).
+#
+# activityScale only sets how many decays share one event: decays are grouped per vertex
+# in TruthLaBr/decays, so pileup does not bias the per-decay spectrum. 10000 gives ~8.6
+# decays per event; 20000 events -> ~1.7e5 decays -> ~2e4 in the EC peak (~0.7% stat).
+#
+# Run:  mu2e -c Offline/STMMC/fcl/La138InternalEfficiency.fcl 2>&1 | tee La138InternalEfficiency.log
+#       grep "La-138" La138InternalEfficiency.log      # decay count and simulated activity
+#       root -l -b -q 'Offline/STMMC/src/la138InternalEfficiency.C("nts.La138InternalEfficiency.root", <nDecays>, <A_sim Bq>)'
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: La138InternalEfficiency
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 20000
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    intrinsic : {
+      module_type : LaBrIntrinsicSource
+      x : -3863.36       # digitizer's corrected crystal centre
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm
+      windowTime : @local::LaBrPileup.micropulseTime
+      includeLa138 : true
+      includeAc227 : false
+      activityScale : 10000.0
+      verbosityLevel : 1   # prints the La-138 activity used; endJob prints the decay count
+    }
+
+    g4run : @local::g4run
+  }
+
+  analyzers : {
+    TruthLaBr : {
+      module_type : LaBrTruthSpectrum
+      StepPointMCsTag : "g4run:STMDet"
+      alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+      alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+    }
+  }
+
+  simulation_path : [intrinsic, g4run]
+  truth_path : [TruthLaBr]
+  trigger_paths : [simulation_path]
+  end_paths : [truth_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# LaBrIntrinsicSource emits the decay products directly, so no G4 radioactive decay.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+physics.producers.g4run.inputs.primaryTag: "intrinsic"
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.La138InternalEfficiency.root"
