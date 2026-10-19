@@ -94,7 +94,7 @@ STMMCAnalysis : {
         HPGe : {
             stmWaveformDigisTag : {
                 concatenated : "concatenateWaveformsHPGe:"
-                uSpill : "DigiHPGe:"
+                uSpill : "DigiHPGe:HPGe"
             }
             tbefore : @local::STM.HPGe.tbefore
             tafter : @local::STM.HPGe.tafter
@@ -103,7 +103,7 @@ STMMCAnalysis : {
             naverage : @local::STM.HPGe.naverage
         }
         LaBr : {
-            stmWaveformDigisTag : "DigiLaBr:"
+            stmWaveformDigisTag : "DigiLaBr:LaBr"
             tbefore : @local::STM.LaBr.tbefore
             tafter : @local::STM.LaBr.tafter
             threshold : @local::STM.HPGe.threshold
@@ -174,14 +174,56 @@ STMDAQParameters : {
         LaBr : 370.370370370 # MSPS - copied from Offline/STMConditions/fcl/prolog.fcl
     }
 }
+LaBrDigitization : {
+    # Detector response from the Mu2e ELBE test-beam qualification of the
+    # LaBr3:Ce+Sr / Hamamatsu R10233-100 detector (Huang et al., NIM A).
+    EnergyPerADCBin : 0.5 # keV/bin
+    PreamplifierNoiseSD : 0.32 # mV
+    DecayConstant : 0.05 # us (50 ns preamplifier decay, much shorter than HPGe)
+    # Pulse shape (1-exp(-t/tau1))^p * exp(-t/tau2), fitted to real LaBr3 data
+    pulseTau1 : 22.3543 # ns - rise time constant
+    pulseTau2 : 28.0007 # ns - decay time constant
+    pulseRiseSharpening : 6.6596 # rise sharpening exponent p
+    peakKeVPerADC : 0.57 # keV/ADC - peak-height calibration from source data (energy = 0.57 * ADC_peak); overrides EnergyPerADCBin
+    lightYield : 63000 # photons/MeV
+    quantumEfficiency : 0.35 # PMT super-bialkali quantum efficiency (~35%)
+    excessNoiseFactor : 1.27 # PMT dynode-chain excess noise; reproduces 2.2% FWHM at 662 keV
+    # Alpha light quenching (Ac-227 chain). 5-7.4 MeV alphas appear at ~1.5-2.4 MeV
+    # electron-equivalent in LaBr3 (Cheng et al. 2020), i.e. alpha/electron ratio ~0.3.
+    # Fit both values to the alpha-peak positions in bench data. Use the SAME values on the
+    # digitizer and on LaBrTruthPulses / LaBrTruthSpectrum.
+    alphaQuenchingFactor : 0.30 # light ratio at 6 MeV
+    alphaQuenchingSlope : 0.0 # per MeV of alpha energy
+}
+# Intrinsic LaBr3 activity, literature values (Bq/cm^3). Used by La138Source /
+# LaBrIntrinsicSource when la138SpecificActivity is set; otherwise La-138 is computed from
+# the crystal composition (~1.454 Bq/cm^3 with 5% Ce, T1/2 1.03e11 yr).
+LaBrIntrinsicActivity : {
+    la138Literature : 1.425 # B380 3x3 (Cheng et al., NST 31 (2020) 99); multi-crystal avg 1.488
+    ac227Chain : 0.0136 # per chain member, secular equilibrium (same paper); varies ~100x by crystal
+}
+# Pileup-truth tagging (LaBrTruthPulses -> TagPileupPulses)
+# A truth pulse is the total energy one primary deposits in the crystal. Two
+# pulses pile up when the later one lands on the decaying tail of the earlier
+# (window w_after(E) = pulseTau2 * ln(peakADCPerKeV*E / thresholdADC)) or within
+# the fixed rise-side window wBefore of the other.
+LaBrPileup : {
+    micropulseTime : 1695.0 # ns - must match the digitizer's micropulseTime
+    pulseTau2 : 28.0007 # ns - pulse decay constant (same as LaBrDigitization.pulseTau2)
+    peakADCPerKeV : 1.7543859649 # ADC/keV = 1 / LaBrDigitization.peakKeVPerADC (0.57)
+    thresholdADC : 5.0 # ADC - resolving threshold; set to the ZS/pulse-finder threshold
+    wBefore : 20.0 # ns - fixed rise-side pileup window
+    minWindow : 20.0 # ns - minimum forward window, applied even to sub-threshold pulses
+}
 HPGeDigitization : {
     EnergyPerADCBin : 0.5 # keV/bin
     PreamplifierNoiseSD : 0.32 # mV
+    FanoFactor : 0.1 # dimensionless; Ge Fano factor at 77 K
     DecayConstant : 50 # us
     resetEventNumber : 31858
     microspillBufferLengthCount : 1000
     concatenation : {
-        STMWaveformDigisTag : "DigiHPGe:"
+        STMWaveformDigisTag : "DigiHPGe:HPGe"
         nMerge : 31858
         filterTag : "concatenateWaveformsHPGe:"
     }

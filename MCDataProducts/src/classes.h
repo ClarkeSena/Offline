@@ -87,3 +87,6 @@
 
 // Analysis
 #include "Offline/MCDataProducts/inc/MCRelationship.hh"
+
+// STM
+#include "Offline/MCDataProducts/inc/STMMCPulse.hh"

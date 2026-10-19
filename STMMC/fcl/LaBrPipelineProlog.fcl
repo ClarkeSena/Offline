@@ -1,0 +1,214 @@
+#
+# Building blocks and default run configuration for the modular LaBr pipeline.
+#
+#   sources -> genCombined -> g4run -> DigiLaBr -> [truth pulses + pileup tags] -> outputs
+#
+# Three independent pieces, all in the LaBrRun table at the bottom:
+#   1. what is thrown      LaBrRun.primary          : @local::LaBrPipeline.Primary.<gun|spectrum|dataset>
+#   2. Poisson or not      LaBrRun.primary.emission : @local::LaBrPipeline.Emission.<single|poisson>
+#   3. self-scintillation  add / remove "intrinsic" (La-138 + Ac-227) in LaBrRun.sources
+# A second STMParticleSource slot, "background" (default: an upstream dataset), can be listed
+# in LaBrRun.sources as well, e.g. photon-gun signal + upstream neutrons + La-138 in one job.
+#
+# Do not run this file. Use LaBrPipeline.fcl (or a copy of it), which has the layout
+#   #include this file
+#   BEGIN_PROLOG  <LaBrRun overrides>  END_PROLOG
+#   #include "Offline/STMMC/fcl/LaBrPipelineJob.fcl"
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+BEGIN_PROLOG
+
+# Defined piece by piece so later pieces can @local-reference earlier ones.
+LaBrPipeline : {}
+
+# ---- Where gun/spectrum particles start ---------------------------------------------------
+LaBrPipeline.Beam : {
+    # On the LaBr aperture axis, upstream of the SSC shielding (as PhotonGunToLaBrWaveform)
+    aperture : {
+      x : @local::ComponentPositions.LaBr.x
+      y : @local::ComponentPositions.LaBr.y
+      z : 40404
+      radius : 0.0         # mm, uniform disk; 3.989 fills the SSC aperture
+      direction : [0, 0, 1]
+      coneHalfAngle : 0.0  # deg
+    }
+}
+
+# ---- Multiplicity and timing per micropulse (one art event = one micropulse) --------------
+LaBrPipeline.Emission : {
+    # One particle per event at t = 0: a classic particle gun
+    single : {
+      poisson : false
+      nPerEvent : 1
+      timing : "fixed"
+      time : 0.0
+      windowTime : @local::LaBrPileup.micropulseTime
+    }
+    # Poisson process: Poisson(rate * window) per event, uniform times (20 kHz = 0.0339/event)
+    poisson : {
+      poisson : true
+      rateHz : 20000.0
+      timing : "uniform"
+      windowTime : @local::LaBrPileup.micropulseTime
+    }
+}
+
+# ---- Primary particle sources (STMParticleSource) -----------------------------------------
+LaBrPipeline.Primary : {
+    # Mono-energetic photons, 1809 keV Al capture line
+    gun : {
+      module_type : STMParticleSource
+      mode : "gun"
+      pdgId : 22
+      E : 1.809 # MeV (kinetic)
+      beam : @local::LaBrPipeline.Beam.aperture
+      emission : @local::LaBrPipeline.Emission.single
+    }
+    # Photon energy spectrum. Swap `spectrum` for
+    #   { type : "histogram" binEdges : [...] binContents : [...] }         (N+1 edges, N bins)
+    #   { type : "rootHist" fileName : "spec.root" histName : "hE" }         (x axis in MeV)
+    spectrum : {
+      module_type : STMParticleSource
+      mode : "spectrum"
+      pdgId : 22
+      spectrum : {
+        type : "lines"
+        # Example only (Al muonic 2p-1s X-ray, 844 keV, 1809 keV): replace with your spectrum
+        lineEnergies : [0.347, 0.844, 1.809]  # MeV
+        lineIntensities : [1.0, 1.0, 1.0]     # relative
+      }
+      beam : @local::LaBrPipeline.Beam.aperture
+      emission : @local::LaBrPipeline.Emission.poisson
+    }
+    # Particles resampled from an upstream simulation (tree written by DumpSTMParticles.fcl).
+    # The default transform maps the VD101 plane (r = 200 mm) onto the LaBr SSC aperture,
+    # as the production STMResampler does with ShiftVirtualDetectorStepPointMCs.
+    # Set emission.nPerEvent (or rateHz) to (particles or events per upstream event) x
+    # (upstream events per micropulse), see LaBrPipeline.md.
+    dataset : {
+      module_type : STMParticleSource
+      mode : "dataset"
+      dataset : {
+        fileName : "nts.STMParticleDump.root"
+        treeName : "DumpParticles/particles"
+        sampleUnit : "event"   # keep particles of one upstream event together
+        # pdgIds : [2112]      # e.g. neutrons only; default all
+        EMin : 0.0
+        EMax : 0.0             # 0 = no upper limit
+        transform : {
+          inputCentre : [ @local::ComponentPositions.VD101.x, @local::ComponentPositions.VD101.y, @local::ComponentPositions.VD101.z ]
+          outputCentre : [ @local::ShiftVD101Steps.LaBrUpStr.x, @local::ShiftVD101Steps.LaBrUpStr.y, @local::ShiftVD101Steps.LaBrUpStr.z ]
+          inputRadius : @local::ShiftVD101Steps.InputRadius
+          radialScale : 0.0199471140201 # OutputRadius / InputRadius = 3.98942280401 / 200
+        }
+      }
+      emission : {
+        poisson : true
+        nPerEvent : 1.0        # SET THIS from the upstream normalisation
+        timing : "uniform"
+        windowTime : @local::LaBrPileup.micropulseTime
+      }
+    }
+}
+
+# ---- Crystal self-activity: La-138 + Ac-227 chain (LaBrIntrinsicSource) --------------------
+LaBrPipeline.intrinsic : {
+    module_type : LaBrIntrinsicSource
+    x : -3863.36       # digitizer's corrected crystal centre
+    y : 0.0
+    z : 40891.50
+    radius : 38.1      # mm
+    halfLength : 38.1  # mm
+    windowTime : @local::LaBrPileup.micropulseTime
+    includeLa138 : true
+    includeAc227 : true
+    ac227ChainActivity : @local::LaBrIntrinsicActivity.ac227Chain
+    activityScale : 1.0  # >1 boosts statistics (and pileup); keep equal to any source scale
+    verbosityLevel : 1
+}
+
+# ---- Detector response --------------------------------------------------------------------
+LaBrPipeline.DigiLaBr : {
+    module_type : LaBrWaveformsFromStepPointMCsTest
+    StepPointMCsTag : "g4run:STMDet"
+    fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+    EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+    peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+    NoiseSD : 0.0
+    risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+    pulseTau1 : @local::LaBrDigitization.pulseTau1
+    pulseTau2 : @local::LaBrDigitization.pulseTau2
+    pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+    lightYield : @local::LaBrDigitization.lightYield
+    quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+    excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+    alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+    alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+    microspillBufferLengthCount : 2
+    makeTTree : true
+    timeOffset : 0
+    verbosityLevel : 1
+}
+
+# ---- MC truth -----------------------------------------------------------------------------
+LaBrPipeline.TruthPulses : {
+    module_type : LaBrTruthPulses
+    StepPointMCsTag : "g4run:STMDet"
+    micropulseTime : @local::LaBrPileup.micropulseTime
+    alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+    alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+}
+LaBrPipeline.TagPileup : {
+    module_type : TagPileupPulses
+    STMMCPulsesTag : "TruthPulses"
+    # nMerge is set to LaBrRun.nEvents in LaBrPipelineJob.fcl
+    pulseTau2 : @local::LaBrPileup.pulseTau2
+    peakADCPerKeV : @local::LaBrPileup.peakADCPerKeV
+    thresholdADC : @local::LaBrPileup.thresholdADC
+    wBefore : @local::LaBrPileup.wBefore
+    minWindow : @local::LaBrPileup.minWindow
+    makeTTree : true
+}
+LaBrPipeline.TruthLaBr : {
+    module_type : LaBrTruthSpectrum
+    StepPointMCsTag : "g4run:STMDet"
+    alphaQuenchingFactor : @local::LaBrDigitization.alphaQuenchingFactor
+    alphaQuenchingSlope : @local::LaBrDigitization.alphaQuenchingSlope
+}
+LaBrPipeline.BinaryWriter : {
+    module_type : BinaryWaveformWriter
+    stmWaveformDigisTag : "DigiLaBr:LaBr"
+    # fileName is set to LaBrRun.binaryFile in LaBrPipelineJob.fcl
+}
+
+# ---- Default run: single 1809 keV photons, no Poisson, no self-scintillation ---------------
+# Override any of these in the BEGIN_PROLOG block of your job file. Replace a whole table
+# (e.g. LaBrRun.primary) BEFORE overriding keys inside it (e.g. LaBrRun.primary.emission).
+LaBrRun : {
+  processName : "LaBrPipeline"
+  nEvents : 10000                  # micropulses; also the pileup-tagging batch (one batch)
+  baseSeed : 8
+
+  primary : @local::LaBrPipeline.Primary.gun
+  background : @local::LaBrPipeline.Primary.dataset
+  intrinsic : @local::LaBrPipeline.intrinsic
+
+  # Generators that are simulated and merged: any of primary, background, intrinsic
+  sources : [ primary ]
+
+  # Truth-pulse / pileup-tagging chain; [] to skip it
+  truthProducers : [ TruthPulses, TagPileup ]
+  # Analyzers and outputs on the end path: TruthLaBr, BinaryWriter, fullOutput
+  endModules : [ TruthLaBr, fullOutput ]
+
+  artFile : "sim.LaBrPipeline.art"
+  histFile : "nts.LaBrPipeline.root"
+  binaryFile : "labr_pipeline_ADC.bin"
+}
+
+END_PROLOG

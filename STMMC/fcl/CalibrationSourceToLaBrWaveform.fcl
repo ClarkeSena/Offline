@@ -1,0 +1,187 @@
+# Calibration source near the LaBr detector, run alongside the crystal's intrinsic La-138
+# activity, so the two appear in ONE spectrum at their true relative rates.
+#
+# Purpose: validate the La-138 rate. A sealed source of KNOWN activity at a KNOWN position is
+# a transfer standard: simulate it, measure it on the bench, and if the simulation reproduces
+# the measured source rate then the same machinery's La-138 rate can be believed too.
+#
+# This version is La-138 ONLY (La138Source). For La-138 + the Ac-227 alpha chain, which is
+# what a real crystal contains and what dominates above ~1.5 MeV, use
+#   CalibrationSourcePlusIntrinsicToLaBrWaveform.fcl
+#
+# EDIT THE BenchSetup BLOCK BELOW to match the bench: source isotope, activity (with its
+# reference date via elapsedDays), and position (crystal-relative by default).
+#
+# Both generators express their rate the same way,
+#     mean decays per event = activity[Bq] * activityScale * 1695 ns * 1e-9
+# so the RATIO of their count rates is a physical prediction. Keep the activityScale values
+# EQUAL. activityScale also inflates pileup, so pileup fractions are only physical at 1.
+#
+# Geometry caveat: this runs in the Mu2e geometry. The bench lead castle is NOT modelled, so
+# Pb X-rays (72-88 keV) and castle backscatter (~190-220 keV) seen on the bench will be
+# missing here. The La-138 spectrum itself is almost geometry-independent.
+#
+# Run as:
+#   mu2e -c Offline/STMMC/fcl/CalibrationSourceToLaBrWaveform.fcl
+#   root -l -b -q 'Offline/STMMC/src/analyseCalibrationRates.C("nts.CalibrationSource.root",100,37000)'
+# (third argument = the decay-corrected source activity printed at startup)
+#
+# For the source alone set  physics.producers.la138.activityScale : 0
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+BEGIN_PROLOG
+BenchSetup : {
+  # ---- the source ----
+  isotope : "Cs137"        # Cs137, Co60, Na22, Mn54, or custom (then add lineEnergies/lineIntensities)
+  activity : 37000.0       # Bq at the certificate reference date (1 uCi = 37 kBq)
+  elapsedDays : 0.0        # days from the reference date to the bench measurement
+  # ---- where it is ----
+  coordinates : "crystal"  # "crystal": offset from the crystal centre (axis = z, front face
+                           # at z = -38.1); "global": Mu2e coordinates
+  x : 0.0                  # mm
+  y : 0.0                  # mm
+  z : -138.1               # mm: on-axis, 100 mm in front of the front face
+  # ---- statistics ----
+  activityScale : 100.0    # SAME for the source and the crystal
+}
+END_PROLOG
+
+process_name: CalibrationSource
+
+source : {
+  module_type : EmptyEvent
+  # Livetime = maxEvents * 1695 ns. 100000 events = 0.1695 s of real time
+  # (x activityScale in equivalent statistics).
+  maxEvents : 100000
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # ---- The known source -------------------------------------------------------------
+    calsource : {
+      module_type : CalibrationSource
+      isotope : @local::BenchSetup.isotope
+      activity : @local::BenchSetup.activity
+      elapsedDays : @local::BenchSetup.elapsedDays
+      coordinates : @local::BenchSetup.coordinates
+      x : @local::BenchSetup.x
+      y : @local::BenchSetup.y
+      z : @local::BenchSetup.z
+      windowTime : 1695.0  # ns, must match micropulseTime
+      activityScale : @local::BenchSetup.activityScale
+      # 'cone' biases emission into the solid angle subtended by the crystal (~100x faster).
+      # Switch to 'isotropic' to include scatter off surrounding material into the crystal.
+      emissionMode : "cone"
+      verbosityLevel : 1
+    }
+
+    # ---- The rate being calibrated ----------------------------------------------------
+    la138 : {
+      module_type : La138Source
+      x : -3863.36
+      y : 0.0
+      z : 40891.50
+      radius : 38.1      # mm
+      halfLength : 38.1  # mm (crystal length 76.2 mm)
+      windowTime : 1695.0
+      activityScale : @local::BenchSetup.activityScale
+      # Rate: computed from composition + volume (~1.454 Bq/cm^3) unless this is uncommented.
+      # la138SpecificActivity : @local::LaBrIntrinsicActivity.la138Literature
+      verbosityLevel : 1
+    }
+
+    genCombined : {
+      module_type : GenParticleMerger
+      inputTags : [ "calsource", "la138" ]
+    }
+
+    g4run : @local::g4run
+
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # ---- Rate accounting --------------------------------------------------------------
+    # One truth pulse per primary, tagged by source (0 = calibration source, 1 = La-138) on an
+    # absolute timeline. Classification is by generator tag / vertex-in-crystal, so the source
+    # can be placed anywhere (in front, beside, behind).
+    TruthPulses : {
+      module_type : LaBrTruthPulses
+      StepPointMCsTag : "g4run:STMDet"
+      micropulseTime : @local::LaBrPileup.micropulseTime
+    }
+
+    # nMerge = source.maxEvents so the whole run is one batch and no pileup is lost at a
+    # boundary. The 'pulses' TTree it writes is what analyseCalibrationRates.C reads.
+    TagPileup : {
+      module_type : TagPileupPulses
+      STMMCPulsesTag : "TruthPulses"
+      nMerge : 100000
+      pulseTau2 : @local::LaBrPileup.pulseTau2
+      peakADCPerKeV : @local::LaBrPileup.peakADCPerKeV
+      thresholdADC : @local::LaBrPileup.thresholdADC
+      wBefore : @local::LaBrPileup.wBefore
+      minWindow : @local::LaBrPileup.minWindow
+      makeTTree : true
+    }
+  }
+
+  analyzers : {
+    # Per-event truth energy spectrum, split source vs La-138.
+    TruthLaBr : {
+      module_type : LaBrTruthSpectrum
+      StepPointMCsTag : "g4run:STMDet"
+    }
+  }
+
+  simulation_path : [calsource, la138, genCombined, g4run, DigiLaBr, TruthPulses, TagPileup]
+  truth_path : [TruthLaBr]
+  trigger_paths : [simulation_path]
+  output_path : [fullOutput]
+  end_paths : [output_path, truth_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+# Both generators emit decay PRODUCTS directly, so G4 radioactive decay stays off.
+physics.producers.g4run.physics.turnOnRadioactiveDecay: false
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+physics.producers.g4run.inputs.primaryTag: "genCombined"
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.CalibrationSource.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.CalibrationSource.root"

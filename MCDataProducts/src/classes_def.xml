@@ -400,4 +400,10 @@ include="Math/Vector3D.h, Math/Vector4D.h, CLHEP/Vector/LorentzVector.h, CLHEP/V
 <class name="art::Wrapper< std::map<art::SubRunID,mu2e::GenEventCount> >"/>
 <class name="std::map< std::string,std::map<art::SubRunID,mu2e::GenEventCount> >"/>
 
+<!--   ******************STM ************************ -->
+<class name="mu2e::STMMCPulse"/>
+<class name="mu2e::STMMCPulseCollection"/>
+<class name="art::Wrapper<mu2e::STMMCPulseCollection>"/>
+
+
 </lcgdict>

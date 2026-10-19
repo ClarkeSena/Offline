@@ -45,7 +45,7 @@ namespace mu2e {
       MuCapProtonGenTool, MuCapDeuteronGenTool, DIOGenTool, MuCapNeutronGenTool, // 48
       MuCapPhotonGenTool, MuCapGammaRayGenTool, CeLeadingLogGenTool, MuplusMichelGenTool,// 52
       gammaPairProduction, antiproton, Mu2eXGenTool, STMDownStreamGenTool,//56
-      MuCapBNVGenTool, //57
+      MuCapBNVGenTool, STMLa138, STMAc227  //57
       lastEnum //58
     };
 
@@ -66,7 +66,8 @@ namespace mu2e {
     "MuCapProtonGenTool", "MuCapDeuteronGenTool", "DIOGenTool", "MuCapNeutronGenTool", \
       "MuCapPhotonGenTool", "MuCapGammaRayGenTool","CeLeadingLogGenTool","MuplusMichelGenTool", \
       "gammaPairProduction", "antiproton", "Mu2eXGenTool", "STMDownStreamGenTool", \
-      "MuCapBNVGenTool"
+      "MuCapBNVGenTool", \
+      "STMLa138", "STMAc227"
 #endif
 
   public:

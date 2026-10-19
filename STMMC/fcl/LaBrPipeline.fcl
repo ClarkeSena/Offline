@@ -1,0 +1,41 @@
+# Modular LaBr simulation: pick the input, Poisson or not, and self-scintillation or not,
+# by editing ONLY the BEGIN_PROLOG block below. Copy this file to keep several set-ups.
+# Building blocks and all defaults: LaBrPipelineProlog.fcl. Guide: Offline/STMMC/LaBrPipeline.md
+#
+# Run:  mu2e -c Offline/STMMC/fcl/LaBrPipeline.fcl
+# Plot: root -l -b -q 'Offline/STMMC/src/plotLaBrWaveform.C("nts.LaBrPipeline.root")'
+#
+# Rules: replace a whole table (LaBrRun.primary) before changing keys inside it
+# (LaBrRun.primary.emission...), and use ASCII only in this file.
+# Original author: Sena Clarke
+
+#include "Offline/STMMC/fcl/LaBrPipelineProlog.fcl"
+
+BEGIN_PROLOG
+
+LaBrRun.nEvents : 10000
+
+# 1. INPUT: gun | spectrum | dataset
+LaBrRun.primary : @local::LaBrPipeline.Primary.gun
+#   LaBrRun.primary.E : 0.662                                        # gun energy [MeV]
+#   LaBrRun.primary.pdgId : 2112                                     # any particle, e.g. neutrons
+#   LaBrRun.primary.dataset.fileName : "nts.STMParticleDump.root"    # dataset input
+
+# 2. POISSON: single (1 per event at t=0) | poisson (rateHz, uniform times)
+LaBrRun.primary.emission : @local::LaBrPipeline.Emission.single
+#   LaBrRun.primary.emission : @local::LaBrPipeline.Emission.poisson
+#   LaBrRun.primary.emission.rateHz : 20000.0
+
+# 3. SELF-SCINTILLATION: add intrinsic (La-138 + Ac-227 chain) to the list
+#    (background = a second source slot, default an upstream dataset)
+LaBrRun.sources : [ primary ]
+#   LaBrRun.sources : [ primary, intrinsic ]
+#   LaBrRun.intrinsic.includeAc227 : false                           # La-138 only
+#   LaBrRun.intrinsic.activityScale : 100.0                          # boost statistics
+
+# Outputs: add BinaryWriter for the raw int16 ADC stream (LaBrRun.binaryFile)
+LaBrRun.endModules : [ TruthLaBr, fullOutput ]
+
+END_PROLOG
+
+#include "Offline/STMMC/fcl/LaBrPipelineJob.fcl"

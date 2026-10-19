@@ -1,0 +1,120 @@
+# End-to-end simulation: PoissonPhotonGun -> Geant4 -> LaBr digitization -> ADC waveform
+# Fires photons at the LaBr detector as a homogeneous Poisson process. Each event is one
+# 1695 ns micropulse window; meanPhotonsPerEvent = rate * 1695 ns, so 0.0339 = 20 kHz.
+# At 20 kHz ~96.6% of events are empty; run many events (590k events = 1 s of beam).
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: PoissonPhotonGunToLaBrWaveform
+
+source : {
+  module_type : EmptyEvent
+  maxEvents : 10000
+}
+
+services : {
+  @table::Services.Core
+  @table::Services.SimOnly
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    generate : {
+      module_type : PoissonPhotonGun
+      x : @local::ComponentPositions.LaBr.x
+      y : @local::ComponentPositions.LaBr.y
+      z : 40404 # Same z as HPGe aperture, upstream of SSC shielding
+      # Discrete gamma lines [MeV] with relative intensities (mix, not absolute rate).
+      lineEnergies    : [0.347, 0.844, 1.809] # 347, 844, 1809 keV
+      lineIntensities : [1.0,   1.0,   1.0]    # tune to the physical branching ratios
+      # Exponential continuum background, pdf ~ exp(-E/E0) on [EMin, EMax].
+      # Off by default; set enabled : true to add the continuum.
+      background : {
+        enabled : false  # <-- flip to true to turn on
+        weight  : 1.0    # relative to the line intensities above
+        E0      : 0.5    # MeV - continuum slope
+        EMin    : 0.1    # MeV
+        EMax    : 2.0    # MeV
+      }
+      meanPhotonsPerEvent : 0.0339 # 20 kHz * 1695 ns - TOTAL rate over all components
+      maxTime : 1695.0 # ns - one micropulse, must match micropulseTime in the digitizer
+    }
+
+    g4run : @local::g4run
+
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : "g4run:STMDet"
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # Pileup truth, stage 1: one truth pulse per primary, absolute times.
+    TruthPulses : {
+      module_type : LaBrTruthPulses
+      StepPointMCsTag : "g4run:STMDet"
+      micropulseTime : @local::LaBrPileup.micropulseTime
+    }
+
+    # Pileup truth, stage 2: merge micropulses onto one timeline and tag overlaps.
+    # nMerge = source.maxEvents runs the whole job as a single batch so no pileup
+    # is lost at batch boundaries.
+    TagPileup : {
+      module_type : TagPileupPulses
+      STMMCPulsesTag : "TruthPulses"
+      nMerge : 10000
+      pulseTau2 : @local::LaBrPileup.pulseTau2
+      peakADCPerKeV : @local::LaBrPileup.peakADCPerKeV
+      thresholdADC : @local::LaBrPileup.thresholdADC
+      wBefore : @local::LaBrPileup.wBefore
+      minWindow : @local::LaBrPileup.minWindow
+      makeTTree : true
+    }
+  }
+
+  analyzers : {
+    BinaryWriter : {
+      module_type : BinaryWaveformWriter
+      stmWaveformDigisTag : "DigiLaBr:LaBr"
+      fileName : "labr_sim_20kHz_ADC.bin"
+    }
+  }
+
+  simulation_path : [generate, g4run, DigiLaBr, TruthPulses, TagPileup]
+  trigger_paths : [simulation_path]
+  output_path : [BinaryWriter, fullOutput]
+  end_paths : [output_path]
+}
+
+physics.producers.g4run.physics.physicsListName: "QGSP_BERT_EMZ"
+physics.producers.g4run.SDConfig.enableSD: [STMDet]
+
+outputs : {
+  fullOutput : {
+    module_type : RootOutput
+    fileName : "sim.PoissonPhotonGunToLaBrWaveform.art"
+  }
+}
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20
+services.TFileService.fileName        : "nts.PoissonPhotonGunToLaBrWaveform.root"

@@ -1,0 +1,54 @@
+#
+# Interactive 3D view of the STM region for screenshots: the SSC tungsten collimator,
+# the LaBr and HPGe detector crystals, and the trajectories of the photons fired by the
+# PhotonGun (plus their secondaries). Only the STM volumes are added to the scene, so the
+# rest of the Mu2e world is not drawn and the detectors are framed on their own - like the
+# reference figure. Driven as g4run.visualization.initMacro by VisSTMBeam.fcl.
+#
+# Rotate/zoom/pan with the mouse in the Qt window; save a screenshot from the Qt File menu,
+# or uncomment the /vis/ogl/export lines at the bottom to write a PNG from the macro.
+#
+# Original author: Sena Clarke
+
+/control/verbose 0
+/run/verbose 0
+/vis/verbose 1
+
+# Open an interactive X11 OpenGL viewer (displays through XQuartz over `ssh -Y`). Use OGLSX,
+# not OGLSQt: this build has no Qt (the run offers only tcsh/csh UI sessions), so OGLSQt opens
+# no window. OGLSX is still mouse-rotatable; it just has no Qt button bar.
+/vis/open OGLSX 900x900-0+0
+/vis/viewer/set/background white ! ! 0.01
+
+# Build the scene from just the STM pieces (logical-volume names from constructSTM.cc).
+#   TungstenSSCPV - the SSC spot-size collimator (the grey block / "SSC")
+#   fLaBrPV       - the LaBr3:Ce crystal
+#   fHPGePV       - the HPGe crystal (shown for context; this gun aims at LaBr)
+/vis/scene/create
+/vis/scene/add/volume TungstenSSCPV
+/vis/scene/add/volume fLaBrPV
+/vis/scene/add/volume fHPGePV
+/vis/sceneHandler/attach
+
+# Accumulate trajectories over all events so the repeated photons build up into a beam.
+/vis/scene/add/trajectories smooth
+/vis/scene/endOfEventAction accumulate 1000
+
+# Colour trajectories by particle: photons yellow (the beam), e-/e+ for the deposits.
+/vis/modeling/trajectories/create/drawByParticleID
+/vis/modeling/trajectories/drawByParticleID-0/set gamma yellow
+/vis/modeling/trajectories/drawByParticleID-0/set e- cyan
+/vis/modeling/trajectories/drawByParticleID-0/set e+ magenta
+
+# Solid-surface drawing style, like the reference image, with a 3/4 viewpoint.
+/vis/viewer/set/style surface
+/vis/viewer/set/viewpointThetaPhi 70 20 deg
+/vis/viewer/set/lightsThetaPhi 60 40 deg
+/vis/viewer/zoom 1.5
+
+# To export a PNG straight from the macro instead of a manual screenshot, uncomment:
+#/vis/ogl/set/exportFormat png
+#/vis/ogl/set/exportFilename STMbeam
+#/vis/ogl/export
+
+# Do NOT issue /run/beamon here; the Mu2eG4 module drives the run and redraws each event.

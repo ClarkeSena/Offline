@@ -1,0 +1,39 @@
+# Makes the "dataset" input of the LaBr pipeline: dumps the particles crossing a virtual
+# detector in an upstream-stage art file to a flat TTree (DumpParticles/particles) that
+# STMParticleSource resamples. Also writes DumpParticles/info (nEvents) for normalisation.
+#
+# Run:  mu2e -c Offline/STMMC/fcl/DumpSTMParticles.fcl -S upstream_files.txt
+#   e.g. the BeamToVD101 / NeutralsToVD101 outputs (dts.owner.*ToVD101.version.sequencer.art)
+# Then point LaBrRun.primary.dataset.fileName (or LaBrRun.background...) at the output.
+# Original author: Sena Clarke
+
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name : DumpSTMParticles
+
+source : {
+  module_type : RootInput
+}
+
+services : {
+  message : @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  analyzers : {
+    DumpParticles : {
+      module_type : STMParticleDump
+      StepPointMCsTag : @local::SimplifyStage1Data.StepPointMCsTag1809  # compressDetStepMCsSTM:virtualdetector
+      virtualDetectorIds : [ @local::SimplifyStage1Data.VirtualDetectorID ] # 101
+      pdgIds : []               # all particles; e.g. [22, 2112] for photons + neutrons
+      firstCrossingOnly : true
+      forwardOnly : true        # only particles heading downstream into the STM
+    }
+  }
+  dump_path : [ DumpParticles ]
+  end_paths : [ dump_path ]
+}
+
+services.TFileService.fileName : "nts.STMParticleDump.root"

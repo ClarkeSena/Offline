@@ -1,0 +1,29 @@
+# Example set-up of the modular LaBr pipeline (see LaBrPipeline.fcl):
+# a photon line spectrum as a 20 kHz Poisson process, plus the crystal's La-138 and
+# Ac-227 self-activity, with the raw ADC stream written for the pulse finder.
+# Original author: Sena Clarke
+
+#include "Offline/STMMC/fcl/LaBrPipelineProlog.fcl"
+
+BEGIN_PROLOG
+
+LaBrRun.processName : "LaBrPoissonSpectrumPlusIntrinsic"
+LaBrRun.nEvents : 100000
+
+LaBrRun.primary : @local::LaBrPipeline.Primary.spectrum
+LaBrRun.primary.spectrum.lineEnergies : [ 0.347, 1.809 ]
+LaBrRun.primary.spectrum.lineIntensities : [ 1.0, 1.0 ]
+LaBrRun.primary.emission : @local::LaBrPipeline.Emission.poisson
+LaBrRun.primary.emission.rateHz : 20000.0
+
+LaBrRun.sources : [ primary, intrinsic ]
+LaBrRun.intrinsic.activityScale : 1.0
+
+LaBrRun.endModules : [ TruthLaBr, BinaryWriter, fullOutput ]
+LaBrRun.artFile : "sim.LaBrPoissonSpectrumPlusIntrinsic.art"
+LaBrRun.histFile : "nts.LaBrPoissonSpectrumPlusIntrinsic.root"
+LaBrRun.binaryFile : "labr_poisson_spectrum_intrinsic_ADC.bin"
+
+END_PROLOG
+
+#include "Offline/STMMC/fcl/LaBrPipelineJob.fcl"
