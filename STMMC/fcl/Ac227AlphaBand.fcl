@@ -1,0 +1,23 @@
+# Ac-227 chain alone in the LaBr crystal -> Geant4 truth deposit per decay, to check the
+# prolog.fcl alpha settings (alphaQuenchingFactor/Slope, LaBrIntrinsicActivity.ac227Chain)
+# against the bench data: alpha peaks at 2.76 / 3.11 / 3.22 / 3.56 MeV and
+# 17.2 +- 0.4 alphas/s in the 2.4-3.8 MeV band (labrSelfActivity.py, run 125382).
+#
+# Same job as La138InternalEfficiency.fcl with La-138 off and the chain on. activityScale
+# 1e5 gives ~3 alphas per event; decays are grouped per vertex in TruthLaBr/decays, so the
+# boosted rate does not pile them up.
+#
+# Run:  mu2e -c Offline/STMMC/fcl/Ac227AlphaBand.fcl 2>&1 | tee Ac227AlphaBand.log
+#       root -l -b -q 'Offline/STMMC/src/ac227AlphaBand.C("nts.Ac227AlphaBand.root", 20000, 1e5)'
+# Original author: Sena Clarke
+
+#include "Offline/STMMC/fcl/La138InternalEfficiency.fcl"
+
+process_name: Ac227AlphaBand
+
+physics.producers.intrinsic.includeLa138 : false
+physics.producers.intrinsic.includeAc227 : true
+physics.producers.intrinsic.ac227ChainActivity : @local::LaBrIntrinsicActivity.ac227Chain
+physics.producers.intrinsic.activityScale : 100000.0
+
+services.TFileService.fileName : "nts.Ac227AlphaBand.root"

@@ -1,0 +1,85 @@
+# Digitize the STM crystal hits from the VD resampler chain in BOTH detectors.
+#   Stage 1: Production/JobConfig/pileup/STM/VDResamplerGenerateMix.fcl  (GenParticles on VD116)
+#   Stage 2: Production/JobConfig/pileup/STM/VDResamplerToCrystals.fcl   (G4 to the crystals)
+#   Stage 3: this job - reads the stage 2 crystal output
+#            (dts.owner.STMVDResamplerToCrystals.version.sequencer.art) and runs the HPGe and
+#            LaBr digitizers on its compressSTMDet:STMDet steps. No Geant4 here.
+# Digitizer settings are identical to FullSimToHPGeAndLaBrWaveforms.fcl, so the output trees
+# (DigiHPGe/ttree, DigiLaBr/ttree) can be plotted with plotHPGeAndLaBrSpectra.C.
+# Each input event is ONE particle from VD116 (no pileup); normalise with the POT reported at
+# the end of stage 1.
+# Run:  mu2e -c Offline/STMMC/fcl/VDResamplerCrystalsToHPGeAndLaBrWaveforms.fcl -S crystal_files.txt
+# Plot: root -l -b -q 'Offline/STMMC/src/plotHPGeAndLaBrSpectra.C("nts.VDResamplerCrystalsHPGeLaBr.root")'
+# Original author: Sena Clarke
+
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/STMMC/fcl/prolog.fcl"
+
+process_name: VDResamplerCrystalsHPGeLaBr
+
+source : {
+  module_type : RootInput
+}
+
+services : {
+  @table::Services.Core
+  message: @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  producers : {
+    # HPGe digitization; keeps only HPGe-side steps (x < -3904).
+    DigiHPGe : {
+      module_type : HPGeWaveformsFromStepPointMCs
+      StepPointMCsTag : @local::SimplifyStage2Data.StepPointMCsTagSTMDet # compressSTMDet:STMDet
+      fADC : @local::STMDAQParameters.samplingFrequencies.HPGe
+      EnergyPerADCBin : @local::HPGeDigitization.EnergyPerADCBin
+      NoiseSD : @local::HPGeDigitization.PreamplifierNoiseSD
+      FanoFactor : @local::HPGeDigitization.FanoFactor
+      risingEdgeDecayConstant : @local::HPGeDigitization.DecayConstant
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+
+    # LaBr digitization; keeps only LaBr-side steps (x > -3925).
+    DigiLaBr : {
+      module_type : LaBrWaveformsFromStepPointMCsTest
+      StepPointMCsTag : @local::SimplifyStage2Data.StepPointMCsTagSTMDet # compressSTMDet:STMDet
+      fADC : @local::STMDAQParameters.samplingFrequencies.LaBr
+      EnergyPerADCBin : @local::LaBrDigitization.EnergyPerADCBin
+      peakKeVPerADC : @local::LaBrDigitization.peakKeVPerADC
+      NoiseSD : 0.0
+      risingEdgeDecayConstant : @local::LaBrDigitization.DecayConstant
+      pulseTau1 : @local::LaBrDigitization.pulseTau1
+      pulseTau2 : @local::LaBrDigitization.pulseTau2
+      pulseRiseSharpening : @local::LaBrDigitization.pulseRiseSharpening
+      lightYield : @local::LaBrDigitization.lightYield
+      quantumEfficiency : @local::LaBrDigitization.quantumEfficiency
+      excessNoiseFactor : @local::LaBrDigitization.excessNoiseFactor
+      microspillBufferLengthCount : 2
+      makeTTree : true
+      timeOffset : 0
+      verbosityLevel : 1
+    }
+  }
+
+  digi_path : [DigiHPGe, DigiLaBr]
+  trigger_paths : [digi_path]
+  output_path : [digiOutput]
+  end_paths : [output_path]
+}
+
+outputs : {
+  digiOutput : {
+    module_type : RootOutput
+    fileName : "sim.VDResamplerCrystalsHPGeLaBr.art"
+  }
+}
+
+# No SeedService: Services.SimOnly is not included (no Geant4) and both digitizers use
+# std::default_random_engine.
+services.TFileService.fileName        : "nts.VDResamplerCrystalsHPGeLaBr.root"
