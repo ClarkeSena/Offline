@@ -74,7 +74,7 @@ namespace mu2e {
       fhicl::OptionalAtom<double> lightYield{ Name("lightYield"), Comment("Scintillation photons per MeV. Default 63000.")};
       fhicl::OptionalAtom<double> quantumEfficiency{ Name("quantumEfficiency"), Comment("PMT super-bialkali quantum efficiency (0-1). Default 0.35.")};
       fhicl::OptionalAtom<double> excessNoiseFactor{ Name("excessNoiseFactor"), Comment("PMT excess noise factor F (>=1) from dynode multiplication. Default 1.27 reproduces 2.2% FWHM at 662 keV.")};
-      fhicl::OptionalAtom<double> alphaQuenchingFactor{ Name("alphaQuenchingFactor"), Comment("Light yield of alphas relative to electrons at 6 MeV. Default 1 (no quenching); ~0.3 for LaBr3. Needed with LaBrIntrinsicSource.")};
+      fhicl::OptionalAtom<double> alphaQuenchingFactor{ Name("alphaQuenchingFactor"), Comment("Light yield of alphas relative to electrons at 6 MeV. Default 1 (no quenching); 0.459 for the Mu2e crystal (bench, prolog.fcl), ~0.3 in the literature. Needed with LaBrIntrinsicSource.")};
       fhicl::OptionalAtom<double> alphaQuenchingSlope{ Name("alphaQuenchingSlope"), Comment("Change of the alpha quenching factor per MeV of alpha energy [1/MeV]. Default 0.")};
       fhicl::OptionalAtom<int> microspillBufferLengthCount{ Name("microspillBufferLengthCount"), Comment("Number of microspills to buffer ahead for")};
       fhicl::OptionalAtom<bool> makeTTree{ Name("makeTTree"), Comment("Controls whether to make the TTree")};

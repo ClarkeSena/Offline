@@ -27,7 +27,8 @@
 //     member is generated as an independent Poisson process.
 //
 // Alphas deposit their full energy in Geant4; the scintillation light quenching (alpha/beta
-// ratio ~0.3) is applied downstream in the digitizer and truth modules (LaBrTruthHelpers.hh).
+// ratio 0.459 at 6 MeV for the Mu2e crystal, bench-measured; ~0.3 in the literature) is
+// applied downstream in the digitizer and truth modules (LaBrTruthHelpers.hh, prolog.fcl).
 //
 // Decay data sources (checked 2026-09-24):
 //   [ENSDF]  Evaluated Nuclear Structure Data File, retrieved through the IAEA LiveChart of

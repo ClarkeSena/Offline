@@ -4,8 +4,9 @@
 // Helpers shared by the LaBr digitizer and the LaBr truth modules, so that all three agree
 // on (1) how much scintillation light a step makes and (2) which source a primary came from.
 //
-// 1) Alpha light quenching. LaBr3 produces ~0.3x less light per MeV for alphas than for
-//    electrons, so the 5-7.4 MeV Ac-227 chain alphas appear at ~1.5-2.4 MeV electron-equivalent.
+// 1) Alpha light quenching. LaBr3 produces less light per MeV for alphas than for electrons:
+//    ~0.3x in the literature, ~0.46x measured for the Mu2e crystal, where the 5.7-7.4 MeV
+//    Ac-227 chain alphas appear at 2.5-3.7 MeV electron-equivalent (prolog.fcl values).
 //    Every step made by an alpha is scaled by
 //        QF(E0) = alphaQuenchingFactor + alphaQuenchingSlope * (E0 - 6 MeV)
 //    where E0 is the alpha's initial kinetic energy (the light output depends on the whole

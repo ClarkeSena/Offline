@@ -5,7 +5,8 @@
 #   - the known source pins the absolute efficiency (transfer standard),
 #   - La-138 is fixed by the crystal volume and composition (or the literature value),
 #   - the Ac-227 chain varies by crystal and is FITTED: its activity sets the rate in the
-#     1.5-2.4 MeV alpha band, alphaQuenchingFactor/Slope set where the alpha peaks sit.
+#     2.4-3.8 MeV alpha band, alphaQuenchingFactor/Slope set where the alpha peaks sit
+#     (both fitted to the Mu2e crystal's bench data, 2026-10-19; see prolog.fcl).
 # analyseCalibrationRates.C prints the rate per feature window for each component, to be
 # compared window by window with the (room-background subtracted) bench spectrum.
 #
@@ -95,6 +96,7 @@ physics : {
       # la138SpecificActivity : @local::LaBrIntrinsicActivity.la138Literature
       ac227ChainActivity : @local::BenchSetup.ac227ChainActivity
       # Out-of-equilibrium fit: Ac227, Th227, Ra223, Rn219, Po215, Pb211, Bi211, Tl207 [Bq/cm^3]
+      # (example values: Cheng 2020 B380 per-member literature, not the Mu2e crystal)
       # memberSpecificActivities : [0.0136, 0.0158, 0.0127, 0.0125, 0.0125, 0.0136, 0.0136, 0.0136]
       activityScale : @local::BenchSetup.activityScale
       verbosityLevel : 1

@@ -188,19 +188,37 @@ LaBrDigitization : {
     lightYield : 63000 # photons/MeV
     quantumEfficiency : 0.35 # PMT super-bialkali quantum efficiency (~35%)
     excessNoiseFactor : 1.27 # PMT dynode-chain excess noise; reproduces 2.2% FWHM at 662 keV
-    # Alpha light quenching (Ac-227 chain). 5-7.4 MeV alphas appear at ~1.5-2.4 MeV
-    # electron-equivalent in LaBr3 (Cheng et al. 2020), i.e. alpha/electron ratio ~0.3.
-    # Fit both values to the alpha-peak positions in bench data. Use the SAME values on the
-    # digitizer and on LaBrTruthPulses / LaBrTruthSpectrum.
-    alphaQuenchingFactor : 0.30 # light ratio at 6 MeV
-    alphaQuenchingSlope : 0.0 # per MeV of alpha energy
+    # Alpha light quenching (Ac-227 chain): QF(E0) = alphaQuenchingFactor
+    # + alphaQuenchingSlope * (E0 - 6 MeV). Use the SAME values on the digitizer and on
+    # LaBrTruthPulses / LaBrTruthSpectrum.
+    # SOURCE: Mu2e LaBr3:Ce+Sr bench data, Eu-152 runs 125382 / 125385 (2026-10-19), analysed
+    # with labrSelfActivity.py. Fitted to the alpha lines that go to the daughter ground state
+    # (no coincident gamma): Bi-211 6.623 -> 3.11, Rn-219 6.819 -> 3.22, Po-215 7.386 -> 3.56
+    # MeV electron-equivalent (QF 0.470, 0.472, 0.482). The Ra-223 + Th-227 cluster lands at
+    # 2.76 MeV, consistent. Peak positions +-20 keV -> QF +-0.005; energy scale above 1.46 MeV
+    # is an extrapolation of the Eu-152 calibration.
+    # PREVIOUS: 0.30, slope 0 - from the 1.5-2.4 MeV alpha band of a standard LaBr3:Ce B380
+    # crystal (Cheng et al., Nucl. Sci. Tech. 31 (2020) 99, arXiv:2007.07552).
+    alphaQuenchingFactor : 0.459 # light ratio at 6 MeV
+    alphaQuenchingSlope : 0.016 # per MeV of alpha energy
 }
-# Intrinsic LaBr3 activity, literature values (Bq/cm^3). Used by La138Source /
-# LaBrIntrinsicSource when la138SpecificActivity is set; otherwise La-138 is computed from
-# the crystal composition (~1.454 Bq/cm^3 with 5% Ce, T1/2 1.03e11 yr).
+# Intrinsic LaBr3 activity (Bq/cm^3).
+#   La-138: LaBrIntrinsicSource / La138Source compute it from the crystal composition
+#   (1.454 Bq/cm^3 with 5% Ce, T1/2 1.03e11 yr) unless la138SpecificActivity is set.
+#   Ac-227: ac227ChainActivity per chain member, secular equilibrium.
+# SOURCE of the measured values: same bench runs and analysis as alphaQuenchingFactor above.
+#   La-138: EC sum-peak rate 63.4 +- 0.7 counts/s (run 125382, 1380-1560 keV, Eu-152 1408
+#     subtracted) / (ecFraction 0.655 x eps_int 0.1896 from La138InternalEfficiency.fcl)
+#     = 511 +- 6 Bq. Run 125385 gives 528 Bq (its live time is suspect). Agrees with the
+#     computed value, which is therefore kept as the default.
+#   Ac-227: 17.2 +- 0.4 alphas/s in the 2.4-3.8 MeV band (run 125382, sideband-subtracted)
+#     = 5 alpha emitters x 0.0099 Bq/cm^3 x 347.5 cm^3. Alpha escape from the surface
+#     < 0.1%; no chain beta reaches the band.
 LaBrIntrinsicActivity : {
+    la138Measured : 1.470 # +- 0.019 stat; bench, see above
     la138Literature : 1.425 # B380 3x3 (Cheng et al., NST 31 (2020) 99); multi-crystal avg 1.488
-    ac227Chain : 0.0136 # per chain member, secular equilibrium (same paper); varies ~100x by crystal
+    ac227Chain : 0.0099 # bench, see above. Was 0.0136 (= ac227ChainLiterature)
+    ac227ChainLiterature : 0.0136 # B380 3x3 mean of Th-227/Ra-223/Rn-219/Bi-211 (Cheng 2020); varies ~100x by crystal
 }
 # Pileup-truth tagging (LaBrTruthPulses -> TagPileupPulses)
 # A truth pulse is the total energy one primary deposits in the crystal. Two
