@@ -8,6 +8,8 @@
 # (DigiHPGe/ttree, DigiLaBr/ttree) can be plotted with plotHPGeAndLaBrSpectra.C.
 # Each input event is ONE particle from VD116 (no pileup); normalise with the POT reported at
 # the end of stage 1.
+# foldTime : true folds hit times into one micropulse (fmod, as the tracker/calo/CRV digitizers
+# do), so late hits are kept instead of rejected. Set false to compare with the unfolded case.
 # Run:  mu2e -c Offline/STMMC/fcl/VDResamplerCrystalsToHPGeAndLaBrWaveforms.fcl -S crystal_files.txt
 # Plot: root -l -b -q 'Offline/STMMC/src/plotHPGeAndLaBrSpectra.C("nts.VDResamplerCrystalsHPGeLaBr.root")'
 # Original author: Sena Clarke
@@ -42,6 +44,7 @@ physics : {
       microspillBufferLengthCount : 2
       makeTTree : true
       timeOffset : 0
+      foldTime : true      # keep late hits (slow neutrons): fold into one micropulse
       verbosityLevel : 1
     }
 
@@ -63,6 +66,7 @@ physics : {
       microspillBufferLengthCount : 2
       makeTTree : true
       timeOffset : 0
+      foldTime : true      # keep late hits (slow neutrons): fold into one micropulse
       verbosityLevel : 1
     }
   }

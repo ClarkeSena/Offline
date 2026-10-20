@@ -72,6 +72,7 @@ namespace mu2e {
       fhicl::OptionalAtom<int> microspillBufferLengthCount{ Name("microspillBufferLengthCount"), Comment("Number of microspills to buffer ahead for, in number of microspills")};
       fhicl::OptionalAtom<bool> makeTTree{ Name("makeTTree"), Comment("Controls whether to make the TTree with branches chargeCollected, chargeDecayed, ADC, eventId, time")};
       fhicl::OptionalAtom<double> timeOffset{ Name("timeOffset"), Comment("For debugging, adds the named time offset in [ns], used for testing analysis algorithms")};
+      fhicl::OptionalAtom<bool> foldTime{ Name("foldTime"), Comment("If true, fold step times into one micropulse with fmod(t, micropulseTime) before the buffer cut, as the tracker, calorimeter and CRV digitizers do. Keeps late hits (e.g. slow neutrons) that would otherwise be rejected. Default false.")};
       fhicl::OptionalAtom<uint> resetEventNumber{ Name("resetEventNumber"), Comment("Simulates the off-spill period by resetting the inter-event last decayed charge to zero")};
       fhicl::OptionalAtom<uint> verbosityLevel{ Name("verbosityLevel"), Comment("Controls verbosity")};
     };
@@ -96,6 +97,7 @@ namespace mu2e {
     double risingEdgeDecayConstant = 0;                                                                         // [us]
     bool makeTTree = false;                                                                                     // Controls whether an analysis TTree is made
     double timeOffset = 0.0;                                                                                    // Used for debugging [ns]
+    bool foldTime = false;                                                                                      // Fold step times into one micropulse
     uint resetEventNumber = 0;                                                                                  // Event ID at which to reset the charge amplitude
     int verbosityLevel = 0;                                                                                     // How much output to generate
 
@@ -178,6 +180,7 @@ namespace mu2e {
     uint64_t n_steps_to_deposit = 0;        // reached depositCharge
     uint64_t n_reject_xcut = 0;             // hitPosition.x() > -3904 (LaBr side)
     uint64_t n_reject_timecut = 0;          // step.time() > buffer window
+    uint64_t n_folded = 0;                  // step.time() folded into one micropulse (foldTime)
     uint64_t n_reject_bounds = 0;           // hitZ/hitR outside crystal envelope
     uint64_t n_deposit_ok = 0;              // charge actually deposited
 
@@ -253,6 +256,7 @@ namespace mu2e {
 
         // Assign the approrpiate time offset
         timeOffset = conf().timeOffset() ? *(conf().timeOffset()) : 0.0;
+        foldTime = conf().foldTime() ? *(conf().foldTime()) : false;
 
         // Assign TTrees
         makeTTree = conf().makeTTree() ? *(conf().makeTTree()) : false;
@@ -299,6 +303,7 @@ namespace mu2e {
       std::cout << std::left << "\t\t" << std::setw(60) << "microspillBufferLengthCount"          << microspillBufferLengthCount              << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "makeTTree"                            << makeTTree                                << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "timeOffset [ns]"                      << timeOffset                               << std::endl;
+      std::cout << std::left << "\t\t" << std::setw(60) << "foldTime"                             << foldTime                                 << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "resetEventNumber"                     << resetEventNumber                         << std::endl;
       std::cout << "\tDerived parameters: " << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "tADC [ns]"                            << tADC                                     << std::endl;
@@ -459,8 +464,15 @@ namespace mu2e {
       ++n_reject_xcut;
       return;
     }
+    // Time of the hit within the buffer. With foldTime, late hits (e.g. slow neutrons from
+    // earlier micropulses) are folded into one micropulse, as in the tracker/calo/CRV digitizers.
+    double stepTime = step.time();
+    if (foldTime && stepTime >= micropulseTime) {
+      stepTime = std::fmod(stepTime, micropulseTime);
+      ++n_folded;
+    }
     // If the time is outside the buffer time, skip it
-    if (step.time() > (microspillBufferLengthCount * micropulseTime)) {
+    if (stepTime > (microspillBufferLengthCount * micropulseTime)) {
       ++n_reject_timecut;
       return;
     }
@@ -568,7 +580,7 @@ namespace mu2e {
     N_ehPairs = -1.0 * N_mean; // -1.0 as this is a decreasing peak
 
     // Define parameters required for charge deposition. Constants A and B are defined here for code brevity
-    uint tIndex = (step.time() + timeOffset) / tADC, tIndexStart = tIndex;
+    uint tIndex = (stepTime + timeOffset) / tADC, tIndexStart = tIndex;
     const double A = N_ehPairs / log(R2/R1);
     const double Be = electronDriftVelocity / R0;
     const double Bh = holeDriftVelocity / R0;
@@ -623,6 +635,7 @@ namespace mu2e {
     std::cout << "  steps with ionizingEdep==0 : " << n_steps_zero_edep << std::endl;
     std::cout << "  steps reaching depositCharge: " << n_steps_to_deposit << std::endl;
     std::cout << "    rejected: x > -3904 (LaBr): " << n_reject_xcut     << std::endl;
+    std::cout << "    folded into micropulse    : " << n_folded          << std::endl;
     std::cout << "    rejected: step.time > buf : " << n_reject_timecut  << std::endl;
     std::cout << "    rejected: out-of-bounds   : " << n_reject_bounds   << std::endl;
     std::cout << "  deposits successful        : " << n_deposit_ok      << std::endl;

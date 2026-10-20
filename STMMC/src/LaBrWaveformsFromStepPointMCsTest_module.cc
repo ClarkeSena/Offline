@@ -79,6 +79,7 @@ namespace mu2e {
       fhicl::OptionalAtom<int> microspillBufferLengthCount{ Name("microspillBufferLengthCount"), Comment("Number of microspills to buffer ahead for")};
       fhicl::OptionalAtom<bool> makeTTree{ Name("makeTTree"), Comment("Controls whether to make the TTree")};
       fhicl::OptionalAtom<double> timeOffset{ Name("timeOffset"), Comment("For debugging, adds a time offset [ns]")};
+      fhicl::OptionalAtom<bool> foldTime{ Name("foldTime"), Comment("If true, fold step times into one micropulse with fmod(t, micropulseTime) before the buffer cut, as the tracker, calorimeter and CRV digitizers do. Keeps late hits (e.g. slow neutrons) that would otherwise be rejected. Default false.")};
       fhicl::OptionalAtom<uint> resetEventNumber{ Name("resetEventNumber"), Comment("Event ID at which to reset inter-event charge to zero")};
       fhicl::OptionalAtom<uint> verbosityLevel{ Name("verbosityLevel"), Comment("Controls verbosity")};
     };
@@ -115,6 +116,7 @@ namespace mu2e {
     double alphaQFSlope = 0.0;            // its change per MeV of alpha energy
     bool makeTTree = false;
     double timeOffset = 0.0;
+    bool foldTime = false;                // fold step times into one micropulse
     uint resetEventNumber = 0;
     int verbosityLevel = 0;
 
@@ -174,6 +176,7 @@ namespace mu2e {
     uint64_t n_steps_to_deposit = 0;
     uint64_t n_reject_xcut = 0;
     uint64_t n_reject_timecut = 0;
+    uint64_t n_folded = 0;
     uint64_t n_reject_bounds = 0;
     uint64_t n_deposit_ok = 0;
 
@@ -273,6 +276,7 @@ namespace mu2e {
         }
 
         timeOffset = conf().timeOffset() ? *(conf().timeOffset()) : 0.0;
+        foldTime = conf().foldTime() ? *(conf().foldTime()) : false;
 
         makeTTree = conf().makeTTree() ? *(conf().makeTTree()) : false;
         if (makeTTree) {
@@ -305,6 +309,7 @@ namespace mu2e {
       std::cout << std::left << "\t\t" << std::setw(60) << "alphaQuenchingFactor (at 6 MeV)"   << alphaQF << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "alphaQuenchingSlope [1/MeV]"       << alphaQFSlope << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "photoelectronsPerMeV"              << photoelectronsPerMeV << std::endl;
+      std::cout << std::left << "\t\t" << std::setw(60) << "foldTime"                          << foldTime << std::endl;
       std::cout << "\tDerived parameters:" << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "tADC [ns]"                        << tADC << std::endl;
       std::cout << std::left << "\t\t" << std::setw(60) << "nADCs"                            << nADCs << std::endl;
@@ -402,7 +407,15 @@ namespace mu2e {
       return;
     }
 
-    if (step.time() > (microspillBufferLengthCount * micropulseTime)) {
+    // Time of the hit within the buffer. With foldTime, late hits (e.g. slow neutrons from
+    // earlier micropulses) are folded into one micropulse, as in the tracker/calo/CRV digitizers.
+    double stepTime = step.time();
+    if (foldTime && stepTime >= micropulseTime) {
+      stepTime = std::fmod(stepTime, micropulseTime);
+      ++n_folded;
+    }
+
+    if (stepTime > (microspillBufferLengthCount * micropulseTime)) {
       ++n_reject_timecut;
       return;
     }
@@ -457,7 +470,7 @@ namespace mu2e {
     // single-photoelectron pulse shape fitted to real LaBr3 data (see
     // pulseShape/pulseCDF). Negative sign: signal is a negative-going pulse
     // (same convention as HPGe).
-    uint tStart = (step.time() + timeOffset) / tADC;
+    uint tStart = (stepTime + timeOffset) / tADC;
     uint bufferEnd = nADCs * microspillBufferLengthCount;
 
     // Fraction of the photoelectron signal remaining to be deposited
@@ -480,6 +493,7 @@ namespace mu2e {
     std::cout << "  steps with ionizingEdep==0 : " << n_steps_zero_edep  << std::endl;
     std::cout << "  steps reaching depositCharge: " << n_steps_to_deposit << std::endl;
     std::cout << "    rejected: x < -3925 (HPGe): " << n_reject_xcut     << std::endl;
+    std::cout << "    folded into micropulse    : " << n_folded           << std::endl;
     std::cout << "    rejected: step.time > buf : " << n_reject_timecut   << std::endl;
     std::cout << "    rejected: out-of-bounds   : " << n_reject_bounds    << std::endl;
     std::cout << "  deposits successful        : " << n_deposit_ok       << std::endl;
