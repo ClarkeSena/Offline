@@ -583,6 +583,16 @@ cet_build_plugin(MuCap1809keVGammaGenerator art::tool
       Offline::Mu2eUtilities
 )
 
+cet_build_plugin(MuStopGammaLineGenerator art::tool
+    REG_SOURCE src/MuStopGammaLineGenerator_tool.cc
+    LIBRARIES REG
+      Offline::EventGenerator
+
+      Offline::DataProducts
+      Offline::MCDataProducts
+      Offline::Mu2eUtilities
+)
+
 cet_build_plugin(MuCapDeuteronGenerator art::tool
     REG_SOURCE src/MuCapDeuteronGenerator_tool.cc
     LIBRARIES REG

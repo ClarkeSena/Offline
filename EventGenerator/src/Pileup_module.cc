@@ -19,6 +19,7 @@
 
 #include "fhiclcpp/types/Atom.h"
 #include "fhiclcpp/types/DelegatedParameter.h"
+#include "fhiclcpp/types/OptionalDelegatedParameter.h"
 #include "fhiclcpp/ParameterSet.h"
 
 #include "messagefacility/MessageLogger/MessageLogger.h"
@@ -55,6 +56,9 @@ namespace mu2e {
 
       fhicl::DelegatedParameter captureProducts{Name("captureProducts"), Comment("A sequence of ParticleGenerator tools implementing capture products.")};
       fhicl::DelegatedParameter decayProducts{Name("decayProducts"), Comment("A sequence of ParticleGenerator tools implementing decay products.")};
+      fhicl::OptionalDelegatedParameter stopProducts{Name("stopProducts"),
+          Comment("Optional sequence of ParticleGenerator tools run for EVERY stop, before the decay/capture\n"
+                  "choice, at the stop time (no muon-lifetime delay), e.g. muonic X-rays from the atomic cascade.")};
 
       fhicl::Atom<unsigned> verbosity{Name("verbosity"),0};
 
@@ -82,6 +86,7 @@ namespace mu2e {
 
     std::vector<std::unique_ptr<ParticleGeneratorTool>> muonDecayGenerators_;
     std::vector<std::unique_ptr<ParticleGeneratorTool>> muonCaptureGenerators_;
+    std::vector<std::unique_ptr<ParticleGeneratorTool>> muonStopGenerators_;
 
     void addParticles(StageParticleCollection* output, art::Ptr<SimParticle> mustop, double time, ParticleGeneratorTool* gen);
   };
@@ -124,6 +129,13 @@ namespace mu2e {
       muonDecayGenerators_.push_back(art::make_tool<ParticleGeneratorTool>(pset));
       muonDecayGenerators_.back()->finishInitialization(eng_, conf().stoppingTargetMaterial(), false);
     }
+
+    if (const auto stop_psets = conf().stopProducts.get_if_present<std::vector<fhicl::ParameterSet>>()) {
+      for (const auto& pset : *stop_psets) {
+        muonStopGenerators_.push_back(art::make_tool<ParticleGeneratorTool>(pset));
+        muonStopGenerators_.back()->finishInitialization(eng_, conf().stoppingTargetMaterial(), false);
+      }
+    }
   }
 
   //================================================================
@@ -134,6 +146,11 @@ namespace mu2e {
     const auto mus = stoppedMuMinusList(simh);
 
     for(const auto& mustop: mus) {
+
+      // products of the stop itself (atomic cascade), emitted at the stop time
+      for (const auto& gen : muonStopGenerators_) {
+        addParticles(output.get(), mustop, mustop->endGlobalTime(), gen.get());
+      }
 
       // decay or capture time for this muon, should
       // be the same for all its daughters

@@ -44,7 +44,9 @@ common_training_config : { # Common training configuration for all particles
   versionTag : ["MDC2025ai", # EleBeam
                 "MDC2025ai", # MuBeam
                 "MDC2025au", # TargetStops1809
-                "MDC2025av"  # Neutrals
+                "MDC2025av", # Neutrals
+                "MDC2025xx", # TargetStops347 - placeholder, set to the BeamTo2VD347 dts version
+                "MDC2025xx"  # TargetStops844 - placeholder, set to the BeamTo2VD844 dts version
                 ]
   # Run number for the Mu2e-convention sequencer field, zero-padded to 6 digits in every generated
   # file name (e.g. "001200"). Paired there with the 8-digit dataSourceTag enumeration. Required.
@@ -406,6 +408,30 @@ particle_training_config : {
       # the list, starting at 1); windows must be disjoint.
       SBDMpeakTagCenters :    [1.809] # MeV/c, raw pTotal
       SBDMpeakTagHalfWidths : [0.001] # +/- 1 keV
+    }
+    # 346.8 keV muonic Al 2p-1s X-ray from TargetStopsCat (BeamTo2VD347.fcl). Same reasoning as
+    # TargetStops1809: a narrow line on top of its own scattered continuum, so 2-stage with the line
+    # named by a peak tag. Emitted at the stop time, so no muon-lifetime tail; no time peak window
+    # until the trained ratio plots show one is needed.
+    TargetStops347 : {
+      SBDMmomentumBasis : "V3_PTOT_SLOPES_ASINH_TIME_ASINH"
+      SBDMpositionBasis : "V2_ATANH_SQRT"
+      @table::common_avg_structure_2_stage_config
+      @table::schedule_small_sample
+      @table::peaksampling_off
+      SBDMpeakTagCenters :    [0.346828] # MeV/c, raw pTotal
+      SBDMpeakTagHalfWidths : [0.001]  # +/- 1 keV
+    }
+    # 843.8 keV from 27Mg beta decay after capture (BeamTo2VD844.fcl). The 27Mg lifetime is folded
+    # into one micropulse, so the line is ~uniform in time rather than prompt.
+    TargetStops844 : {
+      SBDMmomentumBasis : "V3_PTOT_SLOPES_ASINH_TIME_ASINH"
+      SBDMpositionBasis : "V2_ATANH_SQRT"
+      @table::common_avg_structure_2_stage_config
+      @table::schedule_small_sample
+      @table::peaksampling_off
+      SBDMpeakTagCenters :    [0.84376] # MeV/c, raw pTotal
+      SBDMpeakTagHalfWidths : [0.001]   # +/- 1 keV
     }
     # hard to produce samples for the same POT, single stage sufficient
     Neutrals : {

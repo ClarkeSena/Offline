@@ -54,7 +54,8 @@ inline std::string pdgFileToken(int pdgId) {
 // tag in this list is what lands in the file name, so entries may be APPENDED but never reordered
 // or removed — doing so would silently re-point every existing name at a different source.
 inline const std::vector<std::string>& dataSourceNames() {
-  static const std::vector<std::string> kNames = { "EleBeam", "MuBeam", "TargetStops1809", "Neutrals" };
+  static const std::vector<std::string> kNames = { "EleBeam", "MuBeam", "TargetStops1809", "Neutrals",
+                                                      "TargetStops347", "TargetStops844" };
   return kNames;
 }
 
