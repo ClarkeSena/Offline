@@ -1,0 +1,32 @@
+# Dumps a GenParticle collection at full precision to DumpParticles/particles (same layout as
+# DumpSTMParticles.fcl), e.g. the VD116 particles made by VDResamplerGenerateMix.
+# Run:  mu2e -c Offline/STMMC/fcl/DumpGenParticles.fcl -S s1_files.txt
+# Then: root -l -b -q 'Offline/STMMC/src/countSTMParticleDump.C+("nts.GenParticleDump.root")'
+# Original author: Sena Clarke
+
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : DumpGenParticles
+
+source : {
+  module_type : RootInput
+}
+
+services : {
+  message : @local::default_message
+  GlobalConstantsService : { inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt" }
+}
+
+physics : {
+  analyzers : {
+    DumpParticles : {
+      module_type : GenParticleDump
+      GenParticlesTag : "VDResamplerGenerator"
+      virtualDetectorId : 116
+    }
+  }
+  dump_path : [ DumpParticles ]
+  end_paths : [ dump_path ]
+}
+
+services.TFileService.fileName : "nts.GenParticleDump.root"
