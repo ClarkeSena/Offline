@@ -6,6 +6,11 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <map>
+#include <tuple>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 
 #include "cetlib_except/exception.h"
 #include "fhiclcpp/ParameterSet.h"
@@ -15,6 +20,7 @@
 #include "canvas/Utilities/InputTag.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "CLHEP/Vector/ThreeVector.h"
+#include "CLHEP/Units/SystemOfUnits.h"
 
 #include "Geant4/G4Track.hh"
 #include "Geant4/G4Step.hh"
@@ -732,6 +738,174 @@ namespace mu2e {
     }
 
     //================================================================
+    // Selects new tracks by how they were created: particle type, creator process, creator model
+    // (Geant4 >= 11) and kinetic energy at creation within +-tolerance of one of a list of line
+    // energies. Stacking cut only: at stacking the kinetic energy is still the creation energy, so a
+    // Geant4 line is a delta function, and killing the track there also removes everything it would
+    // have produced (Compton continuum etc.). Written to remove the Geant4 muonic Al 2p-1s X-ray
+    // (G4EmCaptureCascade, ~334.7 keV instead of the real 346.8 keV) from the beam samples.
+    //
+    //   pdgId          : particle type (default 22)
+    //   process        : creator process name, "" = any (e.g. "muMinusCaptureAtRest")
+    //   model          : creator model, "" = any; compared with the part of the Geant4 creator model
+    //                    name after the last '_', as Mu2eG4TrackingAction does (e.g. "EMCascade")
+    //   energies       : line energies (MeV)
+    //   tolerance      : half width of the window around each energy (MeV)
+    //   doNotCut       : true counts and reports matches but kills nothing (unchanged physics)
+    //   reportRange    : [emin, emax] (MeV); if set, every track of type pdgId created in this range is
+    //                    counted per (process, model, energy in 1 eV bins), regardless of the process/model
+    //                    selection, and printed at the end of the job. Shows whether the window takes the
+    //                    whole line (inclusive) and nothing created by anything else (unique).
+    //   reportMinCount : print only bins with at least this many entries (default 1)
+    class CreationLine: virtual public IMu2eG4Cut,
+                        public IOHelper
+    {
+    public:
+      virtual bool steppingActionCut(const G4Step  *step);
+      virtual bool stackingActionCut(const G4Track *trk);
+
+      explicit CreationLine(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim);
+      virtual ~CreationLine();
+    private:
+      int pdgId_;
+      std::string process_;
+      std::string model_;
+      std::vector<double> energies_;
+      double tolerance_;
+      bool doNotCut_;
+      std::vector<double> reportRange_;
+      unsigned reportMinCount_;
+
+      unsigned long nInWindow_ = 0; // type, process and model match and the energy is inside a window
+      typedef std::tuple<std::string, std::string, long> SpectrumKey; // process, model, energy (eV)
+      std::map<SpectrumKey, unsigned long> spectrum_;
+
+      std::string creatorModel(const G4Track* trk) const;
+      bool inWindow(double ekin) const;
+      void report() const;
+    };
+
+    CreationLine::CreationLine(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim)
+      : IOHelper(pset, lim)
+      , pdgId_(pset.get<int>("pdgId", 22))
+      , process_(pset.get<std::string>("process", ""))
+      , model_(pset.get<std::string>("model", ""))
+      , energies_(pset.get<std::vector<double> >("energies"))
+      , tolerance_(pset.get<double>("tolerance"))
+      , doNotCut_(pset.get<bool>("doNotCut", false))
+      , reportRange_(pset.get<std::vector<double> >("reportRange", std::vector<double>()))
+      , reportMinCount_(pset.get<unsigned>("reportMinCount", 1))
+    {
+      if(energies_.empty() || tolerance_ <= 0.) {
+        throw cet::exception("CONFIG")<<"Mu2eG4Cuts::CreationLine: needs a non-empty energies list and tolerance > 0. "
+                                      <<"Error in pset = "<<pset.to_string()<<"\n";
+      }
+      if(!reportRange_.empty() && (reportRange_.size() != 2 || reportRange_[0] >= reportRange_[1])) {
+        throw cet::exception("CONFIG")<<"Mu2eG4Cuts::CreationLine: reportRange must be [emin, emax] with emin < emax. "
+                                      <<"Error in pset = "<<pset.to_string()<<"\n";
+      }
+#if G4VERSION<=4100
+      if(!model_.empty()) {
+        throw cet::exception("CONFIG")<<"Mu2eG4Cuts::CreationLine: model selection needs Geant4 >= 11 (G4Track::GetCreatorModelName)\n";
+      }
+#endif
+    }
+
+    std::string CreationLine::creatorModel(const G4Track* trk) const {
+#if G4VERSION>4100
+      const std::string name = trk->GetCreatorModelName();
+      const size_t delPosition = name.find_last_of("_");
+      return (delPosition == std::string::npos) ? name : name.substr(delPosition+1);
+#else
+      return "";
+#endif
+    }
+
+    bool CreationLine::inWindow(double ekin) const {
+      for(const double e : energies_) {
+        if(std::abs(ekin - e) <= tolerance_) return true;
+      }
+      return false;
+    }
+
+    // Steps are not creations: never cut here
+    bool CreationLine::steppingActionCut(const G4Step *) {
+      return false;
+    }
+
+    bool CreationLine::stackingActionCut(const G4Track *trk) {
+      if(trk->GetDefinition()->GetPDGEncoding() != pdgId_) return false;
+
+      const double ekin = trk->GetKineticEnergy();
+      const bool inRange = !reportRange_.empty() && ekin >= reportRange_[0] && ekin <= reportRange_[1];
+      const bool window = inWindow(ekin);
+      if(!window && !inRange) return false;
+
+      G4VProcess const* creator = trk->GetCreatorProcess();
+      const std::string process = creator ? std::string(creator->GetProcessName()) : std::string("primary");
+      const std::string model = creatorModel(trk);
+      const bool selected = (process_.empty() || process == process_) && (model_.empty() || model == model_);
+
+      if(inRange) {
+        ++spectrum_[SpectrumKey(process, model, std::lround(ekin/CLHEP::eV))];
+      }
+      if(!selected || !window) return false;
+      ++nInWindow_;
+      return !doNotCut_;
+    }
+
+    CreationLine::~CreationLine() {
+      report();
+    }
+
+    void CreationLine::report() const {
+      std::ostringstream os;
+      os << "Mu2eG4Cuts::CreationLine pdgId " << pdgId_
+         << " process '" << process_ << "' model '" << model_ << "' tolerance " << tolerance_/CLHEP::keV << " keV"
+         << (doNotCut_ ? " (doNotCut: nothing killed)" : "") << "\n"
+         << "  selected (type+process+model) in a window: " << nInWindow_
+         << (doNotCut_ ? " (would be killed)" : " killed") << "\n";
+
+      if(!reportRange_.empty()) {
+        os << "  creation spectrum " << reportRange_[0]/CLHEP::keV << " - " << reportRange_[1]/CLHEP::keV
+           << " keV, all processes/models, bins with >= " << reportMinCount_ << " entries\n"
+           << "  (selected = matches process/model; window = inside a line window)\n";
+
+        // Energies of the selected tracks inside the windows: should be one value per line, and
+        // every other bin inside a window should be empty (otherwise the cut is not unique)
+        std::map<long, unsigned long> selectedInWindow;
+        unsigned long otherInWindow = 0;
+        double nearestOutside = -1.;
+        for(const auto& [key, n] : spectrum_) {
+          const auto& [process, model, eV] = key;
+          const double e = eV*CLHEP::eV;
+          const bool selected = (process_.empty() || process == process_) && (model_.empty() || model == model_);
+          const bool window = inWindow(e);
+          if(window && selected) selectedInWindow[eV] += n;
+          if(window && !selected) otherInWindow += n;
+          if(!window && selected) {
+            for(const double line : energies_) {
+              const double d = std::abs(e - line);
+              if(nearestOutside < 0. || d < nearestOutside) nearestOutside = d;
+            }
+          }
+          if(n >= reportMinCount_) {
+            os << "    " << std::setw(11) << std::fixed << std::setprecision(3) << e/CLHEP::keV << " keV  "
+               << std::setw(9) << n << "  " << process << " / " << model
+               << (selected ? "  selected" : "") << (window ? "  window" : "") << "\n";
+          }
+        }
+        os << "  distinct energies (1 eV bins) of selected tracks inside the windows: " << selectedInWindow.size()
+           << " (expect one per line)\n"
+           << "  tracks inside a window NOT matching process/model (not killed): " << otherInWindow << " (expect 0)\n";
+        if(nearestOutside >= 0.) {
+          os << "  nearest selected energy outside the windows: " << nearestOutside/CLHEP::keV << " keV from a line\n";
+        }
+      }
+      mf::LogPrint("Mu2eG4Cuts") << os.str();
+    }
+
+    //================================================================
   } // end namespace Mu2eG4Cuts
 
   //================================================================
@@ -761,6 +935,8 @@ namespace mu2e {
     if(cuttype == "primary") return make_unique<PrimaryOnly>(pset, lim);
 
     if(cuttype == "constant") return make_unique<Constant>(pset, lim);
+
+    if(cuttype == "creationLine") return make_unique<CreationLine>(pset, lim);
 
     throw cet::exception("CONFIG")<< "mu2e::createMu2eG4Cuts(): can not parse pset = "<<pset.to_string()<<"\n";
   }
