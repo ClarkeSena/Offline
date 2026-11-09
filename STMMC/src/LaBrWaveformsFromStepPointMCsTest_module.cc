@@ -133,7 +133,6 @@ namespace mu2e {
     uint nADCs = 0;
     const int16_t ADCMax = static_cast<int16_t>((-1 * std::pow(2, 15)) + 1);
     double ADC = 0;
-    uint32_t eventTimeBuffer = 0;
 
     // LaBr crystal geometry [mm]
     // No rotation (identity), crystal axis along +z.
@@ -365,11 +364,9 @@ namespace mu2e {
       }
     }
 
-    eventTimeBuffer = eventId % 5;
-    if (eventTimeBuffer == 0 || (eventId % 3) == 0)
-      eventTime += nADCs + 1;
-    else
-      eventTime += nADCs;
+    // Time stamp in ADC clock ticks from POT t = 0: event N ends N micropulses after the start, rounded to
+    // the nearest tick. Exact for any sampling frequency (micropulseTime / tADC need not be an integer).
+    eventTime = static_cast<uint32_t>(std::llround(eventId * micropulseTime / tADC));
     STMWaveformDigi _waveformDigi(eventTime, _adcs);
     std::unique_ptr<STMWaveformDigiCollection> outputDigis(new STMWaveformDigiCollection);
     outputDigis->emplace_back(_waveformDigi);

@@ -79,6 +79,6 @@ void plotSTMWaveforms(const char* filename = "nts.VDResamplerCrystalsHPGeLaBr.ro
                       double minSwing = 20, int maxEvents = 60) {
   TFile* f = TFile::Open(filename);
   if (!f || f->IsZombie()) { std::cout << "Cannot open " << filename << std::endl; return; }
-  plotDetector(f, "DigiHPGe", "HPGe", 320.0, minSwing, maxEvents);   // STMDAQParameters HPGe fADC
-  plotDetector(f, "DigiLaBr", "LaBr", 370.370370370, minSwing, maxEvents); // LaBr fADC
+  plotDetector(f, "DigiHPGe", "HPGe", 300.0, minSwing, maxEvents);   // STMDAQParameters HPGe fADC
+  plotDetector(f, "DigiLaBr", "LaBr", 300.0, minSwing, maxEvents);   // STMDAQParameters LaBr fADC
 }

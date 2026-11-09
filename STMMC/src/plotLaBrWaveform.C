@@ -121,7 +121,7 @@ void plotLaBrWaveform(const char* filename = "nts.PhotonGunToLaBrWaveform.root")
     gPad->SetMargin(0.17, 0.05, 0.12, 0.08); // left margin wide enough for the y-axis title
 
     const auto& bins = eventData[signalEvents[p]];
-    double adcToNs = 1e3 / 370.370370370; // time bin to ns
+    double adcToNs = 1e3 / 300.0; // time bin to ns (STMDAQParameters LaBr fADC)
 
     // Find the pulse: first/last bin above threshold (same threshold as event selection)
     double tFirst = -1, tLast = -1;
@@ -164,7 +164,7 @@ void plotLaBrWaveform(const char* filename = "nts.PhotonGunToLaBrWaveform.root")
   tex->DrawLatex(0.1, 0.8, "LaBr3:Ce Digitizer");
   tex->SetTextSize(0.06);
   tex->DrawLatex(0.1, 0.65, "1.809 MeV photon gun");
-  tex->DrawLatex(0.1, 0.50, Form("f_{ADC} = 370.37 MHz"));
+  tex->DrawLatex(0.1, 0.50, Form("f_{ADC} = 300 MHz"));
   tex->DrawLatex(0.1, 0.35, Form("%lu events total", eventIds.size()));
 
   c2->SaveAs("LaBr_IndividualPulses.pdf");

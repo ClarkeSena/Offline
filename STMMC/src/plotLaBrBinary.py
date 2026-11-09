@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Plot / export the raw LaBr ADC stream written by BinaryWaveformWriter.
 
-The .bin file is headerless little-endian int16, one sample per 2.7 ns (370.37 MHz), 628
-samples per 1695 ns micropulse, all micropulses back to back. Pulses are negative-going;
+The .bin file is headerless little-endian int16, one sample per 3.333 ns (300 MHz), 509
+samples per 1695 ns micropulse (files written before Nov 2026 are 370.37 MHz / 628: edit FADC_MHZ), all micropulses back to back. Pulses are negative-going;
 with NoiseSD = 0 the baseline is exactly 0. Energy (peak calibration) = 0.57 keV x |ADC peak|.
 
 Examples
@@ -32,9 +32,9 @@ import sys
 
 import numpy as np
 
-FADC_MHZ = 370.370370370
-TADC_NS = 1e3 / FADC_MHZ          # 2.7 ns
-SAMPLES_PER_EVENT = 628           # int(1695 / 2.7) + 1, as the digitizer writes
+FADC_MHZ = 300.0
+TADC_NS = 1e3 / FADC_MHZ          # 3.333 ns
+SAMPLES_PER_EVENT = int(1695.0 / TADC_NS) + 1  # 509, as the digitizer writes
 MICROPULSE_NS = 1695.0            # truth timeline advances by this per event
 PEAK_KEV_PER_ADC = 0.57           # LaBrDigitization.peakKeVPerADC
 

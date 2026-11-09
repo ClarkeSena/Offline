@@ -30,7 +30,7 @@ void analyseCalibrationRates(const char* fname,
                              double threshold_keV = 20.0,
                              long long nEventsFallback = 100000) {
   const double micropulseTime = 1695.0;  // ns, LaBrPileup.micropulseTime
-  const int    nADCs          = 628;     // samples per micropulse at 370.37 MSPS
+  const int    nADCs          = 509;     // samples per micropulse at 300 MSPS (int(1695 / 3.333 + 1))
 
   TFile* f = TFile::Open(fname);
   if (!f || f->IsZombie()) { printf("cannot open %s\n", fname); return; }

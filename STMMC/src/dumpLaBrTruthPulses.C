@@ -47,7 +47,7 @@ void dumpLaBrTruthPulses(const char* fin, const char* fout,
   auto window    = grab("_window");
 
   const double micropulseTime = 1695.0;        // ns, LaBrPileup.micropulseTime
-  const double tADC           = 2.7;           // ns, 1e3 / 370.370370 MSPS
+  const double tADC           = 1e3 / 300.0;   // ns, STMDAQParameters LaBr fADC = 300 MSPS
   const int    nADCs          = 628;           // (int)(micropulseTime/tADC + 1)
   const double peakADCPerKeV  = 1.7543859649;  // LaBrPileup.peakADCPerKeV
 

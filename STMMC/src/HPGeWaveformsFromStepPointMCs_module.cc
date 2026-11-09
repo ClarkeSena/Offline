@@ -116,7 +116,6 @@ namespace mu2e {
     uint nADCs = 0;                                                                                             // Number of ADC values in an event
     const int16_t ADCMax = static_cast<int16_t>((-1 * std::pow(2, 15)) + 1);                                    // Maximum ADC value, power is 15 not 16 as using int16_t not uint16_t
     double ADC = 0;                                                                                             // iterator variable
-    uint32_t eventTimeBuffer = 0;                                                                               // Multiple of event ids to store
 
     // Define Ge crystal properties [mm]
     // Crystal centre in Mu2e coords, derived from constructSTM.cc printout (2026-04-20).
@@ -234,7 +233,7 @@ namespace mu2e {
         microspillBufferLengthCount = conf().microspillBufferLengthCount() ? *(conf().microspillBufferLengthCount()) : defaultMicrospillBufferLengthCount;
         verbosityLevel = conf().verbosityLevel() ? *(conf().verbosityLevel()) : 0;
         fanoFactor = conf().fanoFactor() ? *(conf().fanoFactor()) : 0.0;
-        // Determine the number of ADC values in each STMWaveformDigi. Increase the number by one due to truncation. At 320MHz, this will be 543 ADC values per microbunch
+        // Determine the number of ADC values in each STMWaveformDigi. Increase the number by one due to truncation. At 300 MHz, this is 509 ADC values per micropulse
         double _nADCs = (micropulseTime/tADC) + 1;
         nADCs = (int) _nADCs;
         _charge.insert(_charge.begin(), nADCs * microspillBufferLengthCount, 0.);
@@ -417,12 +416,9 @@ namespace mu2e {
 
     // Simulation takes the POT time as t = 0, and has sequential microspills (events). The trigger time offset is not used here, left as a TODO
     // Create the STMWaveformDigi and insert all the relevant attributes
-    // TODO - this only keeps accurate time if the sampling is 320MHz. Needs to be rewritten to work for other times
-    eventTimeBuffer = eventId % 5;
-    if (eventTimeBuffer == 0 || (eventId % 3) == 0)
-      eventTime += nADCs + 1;
-    else
-      eventTime += nADCs;
+    // Time stamp in ADC clock ticks from POT t = 0: event N ends N micropulses after the start, rounded to
+    // the nearest tick. Exact for any sampling frequency (micropulseTime / tADC need not be an integer).
+    eventTime = static_cast<uint32_t>(std::llround(eventId * micropulseTime / tADC));
     STMWaveformDigi _waveformDigi(eventTime, _adcs);
     std::unique_ptr<STMWaveformDigiCollection> outputDigis(new STMWaveformDigiCollection);
     outputDigis->emplace_back(_waveformDigi);
