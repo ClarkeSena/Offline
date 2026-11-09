@@ -746,6 +746,7 @@ namespace mu2e {
     // (G4EmCaptureCascade, ~334.7 keV instead of the real 346.8 keV) from the beam samples.
     //
     //   pdgId          : particle type (default 22)
+    //   pdgIds         : several particle types instead of pdgId (e.g. an ion in its ground and excited states)
     //   process        : creator process name, "" = any (e.g. "muMinusCaptureAtRest")
     //   model          : creator model, "" = any; compared with the part of the Geant4 creator model
     //                    name after the last '_', as Mu2eG4TrackingAction does (e.g. "EMCascade")
@@ -757,6 +758,7 @@ namespace mu2e {
     //                    selection, and printed at the end of the job. Shows whether the window takes the
     //                    whole line (inclusive) and nothing created by anything else (unique).
     //   reportMinCount : print only bins with at least this many entries (default 1)
+    //   label          : name printed with the report, to tell several creationLine cuts apart (default "")
     class CreationLine: virtual public IMu2eG4Cut,
                         public IOHelper
     {
@@ -767,7 +769,8 @@ namespace mu2e {
       explicit CreationLine(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim);
       virtual ~CreationLine();
     private:
-      int pdgId_;
+      std::string label_;
+      std::vector<int> pdgIds_;
       std::string process_;
       std::string model_;
       std::vector<double> energies_;
@@ -776,6 +779,7 @@ namespace mu2e {
       std::vector<double> reportRange_;
       unsigned reportMinCount_;
 
+      unsigned long nCalls_ = 0;    // stacking calls seen; 0 for the copy Mu2eG4 builds and drops at construction
       unsigned long nInWindow_ = 0; // type, process and model match and the energy is inside a window
       typedef std::tuple<std::string, std::string, long> SpectrumKey; // process, model, energy (eV)
       std::map<SpectrumKey, unsigned long> spectrum_;
@@ -787,7 +791,8 @@ namespace mu2e {
 
     CreationLine::CreationLine(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim)
       : IOHelper(pset, lim)
-      , pdgId_(pset.get<int>("pdgId", 22))
+      , label_(pset.get<std::string>("label", ""))
+      , pdgIds_(pset.get<std::vector<int> >("pdgIds", std::vector<int>(1, pset.get<int>("pdgId", 22))))
       , process_(pset.get<std::string>("process", ""))
       , model_(pset.get<std::string>("model", ""))
       , energies_(pset.get<std::vector<double> >("energies"))
@@ -834,7 +839,9 @@ namespace mu2e {
     }
 
     bool CreationLine::stackingActionCut(const G4Track *trk) {
-      if(trk->GetDefinition()->GetPDGEncoding() != pdgId_) return false;
+      ++nCalls_;
+      const int pdgId = trk->GetDefinition()->GetPDGEncoding();
+      if(std::find(pdgIds_.begin(), pdgIds_.end(), pdgId) == pdgIds_.end()) return false;
 
       const double ekin = trk->GetKineticEnergy();
       const bool inRange = !reportRange_.empty() && ekin >= reportRange_[0] && ekin <= reportRange_[1];
@@ -859,8 +866,11 @@ namespace mu2e {
     }
 
     void CreationLine::report() const {
+      if(nCalls_ == 0) return; // never used for tracking: nothing to report
       std::ostringstream os;
-      os << "Mu2eG4Cuts::CreationLine pdgId " << pdgId_
+      os << "Mu2eG4Cuts::CreationLine " << (label_.empty() ? "" : "[" + label_ + "] ") << "pdgId";
+      for(const int id : pdgIds_) os << " " << id;
+      os
          << " process '" << process_ << "' model '" << model_ << "' tolerance " << tolerance_/CLHEP::keV << " keV"
          << (doNotCut_ ? " (doNotCut: nothing killed)" : "") << "\n"
          << "  selected (type+process+model) in a window: " << nInWindow_
