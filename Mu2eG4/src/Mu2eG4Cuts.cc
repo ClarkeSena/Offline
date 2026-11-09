@@ -897,7 +897,7 @@ namespace mu2e {
         }
         os << "  distinct energies (1 eV bins) of selected tracks inside the windows: " << selectedInWindow.size()
            << " (expect one per line)\n"
-           << "  tracks inside a window NOT matching process/model (not killed): " << otherInWindow << " (expect 0)\n";
+           << "  tracks inside a window NOT matching process/model (not killed): " << otherInWindow << " (kept: other photons that happen to be created at this energy)\n";
         if(nearestOutside >= 0.) {
           os << "  nearest selected energy outside the windows: " << nearestOutside/CLHEP::keV << " keV from a line\n";
         }
