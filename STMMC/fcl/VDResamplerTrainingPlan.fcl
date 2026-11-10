@@ -424,6 +424,10 @@ particle_training_config : {
     }
     # 843.8 keV from 27Mg beta decay after capture (BeamTo2VD844.fcl). The 27Mg lifetime is folded
     # into one micropulse, so the line is ~uniform in time rather than prompt.
+    # NOTE 2026-11-10: BeamTo2VD844.fcl now also emits the 1014.52 keV line of the same 27Mg decay. Samples made
+    # after that contain two lines: when training on one, extend the tags together to
+    # [0.84376, 1.01452] / [0.001, 0.001]. Not done yet because the existing MDC2025sc (s6) samples have only 844,
+    # and a tag with no events in its window should not be trained.
     TargetStops844 : {
       SBDMmomentumBasis : "V3_PTOT_SLOPES_ASINH_TIME_ASINH"
       SBDMpositionBasis : "V2_ATANH_SQRT"
