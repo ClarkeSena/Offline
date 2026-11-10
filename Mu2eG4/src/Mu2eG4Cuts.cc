@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 #include "cetlib_except/exception.h"
 #include "fhiclcpp/ParameterSet.h"
@@ -25,6 +26,10 @@
 #include "Geant4/G4Track.hh"
 #include "Geant4/G4Step.hh"
 #include "Geant4/G4VProcess.hh"
+#include "Geant4/G4Navigator.hh"
+#include "Geant4/G4TransportationManager.hh"
+#include "Geant4/G4LogicalVolume.hh"
+#include "Geant4/G4Material.hh"
 
 #include "Offline/Mu2eG4/inc/IMu2eG4Cut.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4ResourceLimits.hh"
@@ -759,6 +764,9 @@ namespace mu2e {
     //                    whole line (inclusive) and nothing created by anything else (unique).
     //   reportMinCount : print only bins with at least this many entries (default 1)
     //   label          : name printed with the report, to tell several creationLine cuts apart (default "")
+    //   dumpFile       : if set, one CSV line per selected track inside a window (killed or, with doNotCut, would be):
+    //                    position (Mu2e coordinates, mm), time (ns), kinetic energy (keV), creator process/model, and the
+    //                    physical volume and material at the creation point. Shows WHERE the cut acts.
     class CreationLine: virtual public IMu2eG4Cut,
                         public IOHelper
     {
@@ -778,6 +786,9 @@ namespace mu2e {
       bool doNotCut_;
       std::vector<double> reportRange_;
       unsigned reportMinCount_;
+      std::string dumpFileName_;
+      std::ofstream dump_;                       // opened at the first selected track
+      std::unique_ptr<G4Navigator> navigator_;   // own navigator: locating a point must not disturb tracking
 
       unsigned long nCalls_ = 0;    // stacking calls seen; 0 for the copy Mu2eG4 builds and drops at construction
       unsigned long nInWindow_ = 0; // type, process and model match and the energy is inside a window
@@ -787,6 +798,7 @@ namespace mu2e {
       std::string creatorModel(const G4Track* trk) const;
       bool inWindow(double ekin) const;
       void report() const;
+      void dumpTrack(const G4Track* trk, const std::string& process, const std::string& model);
     };
 
     CreationLine::CreationLine(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim)
@@ -800,6 +812,7 @@ namespace mu2e {
       , doNotCut_(pset.get<bool>("doNotCut", false))
       , reportRange_(pset.get<std::vector<double> >("reportRange", std::vector<double>()))
       , reportMinCount_(pset.get<unsigned>("reportMinCount", 1))
+      , dumpFileName_(pset.get<std::string>("dumpFile", ""))
     {
       if(energies_.empty() || tolerance_ <= 0.) {
         throw cet::exception("CONFIG")<<"Mu2eG4Cuts::CreationLine: needs a non-empty energies list and tolerance > 0. "
@@ -858,7 +871,29 @@ namespace mu2e {
       }
       if(!selected || !window) return false;
       ++nInWindow_;
+      if(!dumpFileName_.empty()) dumpTrack(trk, process, model);
       return !doNotCut_;
+    }
+
+    void CreationLine::dumpTrack(const G4Track* trk, const std::string& process, const std::string& model) {
+      if(!navigator_) {
+        G4VPhysicalVolume* world =
+          G4TransportationManager::GetTransportationManager()->GetNavigatorForTracking()->GetWorldVolume();
+        navigator_ = std::make_unique<G4Navigator>();
+        navigator_->SetWorldVolume(world);
+        dump_.open(dumpFileName_);
+        dump_ << "x_mm,y_mm,z_mm,t_ns,ekin_keV,pdgId,process,model,volume,copyNo,material\n";
+      }
+      const G4ThreeVector& pos = trk->GetPosition();
+      const G4VPhysicalVolume* pv = navigator_->LocateGlobalPointAndSetup(pos, nullptr, false, true);
+      const std::string volume = pv ? std::string(pv->GetName()) : std::string("none");
+      const int copyNo = pv ? pv->GetCopyNo() : -1;
+      const std::string material = (pv && pv->GetLogicalVolume()->GetMaterial()) ?
+        std::string(pv->GetLogicalVolume()->GetMaterial()->GetName()) : std::string("none");
+      const CLHEP::Hep3Vector p = pos - mu2eOrigin_;
+      dump_ << std::setprecision(10) << p.x() << ',' << p.y() << ',' << p.z() << ',' << trk->GetGlobalTime() << ','
+            << trk->GetKineticEnergy()/CLHEP::keV << ',' << trk->GetDefinition()->GetPDGEncoding() << ','
+            << process << ',' << model << ',' << volume << ',' << copyNo << ',' << material << '\n';
     }
 
     CreationLine::~CreationLine() {
