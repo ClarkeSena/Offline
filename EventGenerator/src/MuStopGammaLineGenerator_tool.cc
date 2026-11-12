@@ -9,10 +9,17 @@
 // Emission delay (Kinematic::timeDelay, relative to the time the Pileup module hands over):
 //   lifetime = 0                 : prompt
 //   lifetime > 0, foldPeriod = 0 : Exp(lifetime)
-//   lifetime > 0, foldPeriod > 0 : Exp(lifetime) folded into [0, foldPeriod). For a long-lived
-//                                  emitter (lifetime >> foldPeriod) this is uniform in time, i.e. a
-//                                  constant rate uncorrelated with the bunch structure, without
-//                                  pushing photon times out to seconds.
+//   lifetime > 0, foldPeriod > 0 : the FINAL emission time (the time handed over by Pileup, i.e.
+//       the stop time plus the muonic-atom capture/decay time, plus Exp(lifetime)) is folded into
+//       [0, foldPeriod). For a long-lived emitter (lifetime >> foldPeriod) this is uniform over the
+//       period, i.e. a constant rate uncorrelated with the bunch structure, and every photon stays
+//       inside its own micropulse window. (Until 2026-11-11 only the delay was folded, so the final
+//       time ran past the period by the stop + capture time: median 1841 ns, tail to 12 us.)
+//       The tool sets Kinematic::timeFoldPeriod = foldPeriod and the caller does the final fold
+//       (Kinematic::productionTime). timeDelay itself is also pre-folded into [0, foldPeriod): this
+//       is exact (fmod) and gives the same result modulo the period, avoids adding a ~1e12 ns delay
+//       to a ~1e3 ns time (~1e-4 ns rounding), and keeps times bounded for a caller that ignores
+//       timeFoldPeriod.
 
 #include "art/Utilities/ToolMacros.h"
 #include "cetlib_except/exception.h"
@@ -37,7 +44,7 @@ namespace mu2e {
       fhicl::Atom<double> energy     {Name("energy")    , Comment("Photon energy (MeV)")};
       fhicl::Atom<double> intensity  {Name("intensity") , Comment("Emission probability per generate() call, in [0, 1]")};
       fhicl::Atom<double> lifetime   {Name("lifetime")  , Comment("Mean emission delay (ns), 0 for prompt"), 0.};
-      fhicl::Atom<double> foldPeriod {Name("foldPeriod"), Comment("If > 0, fold the delay into [0, foldPeriod) (ns)"), 0.};
+      fhicl::Atom<double> foldPeriod {Name("foldPeriod"), Comment("If > 0 (and lifetime > 0), fold the final time into [0, foldPeriod) (ns)"), 0.};
       fhicl::Atom<double> czMin      {Name("czmin")     , Comment("Restrict cos(theta_z) minimum"), -1.};
       fhicl::Atom<double> czMax      {Name("czmax")     , Comment("Restrict cos(theta_z) maximum"),  1.};
     };
@@ -88,6 +95,7 @@ namespace mu2e {
   double MuStopGammaLineGenerator::emissionDelay() {
     if(_lifetime <= 0.) return 0.;
     const double delay = _randExp->fire(_lifetime);
+    // Pre-fold (see header comment); the caller folds the final time again via timeFoldPeriod
     return (_foldPeriod > 0.) ? std::fmod(delay, _foldPeriod) : delay;
   }
 
@@ -100,6 +108,7 @@ namespace mu2e {
       CLHEP::HepLorentzVector fourmom(p3, _energy);
       ParticleGeneratorTool::Kinematic k{_pdgId, ProcessCode::mu2eMuonCaptureAtRest, fourmom};
       k.timeDelay = emissionDelay();
+      k.timeFoldPeriod = (_lifetime > 0.) ? _foldPeriod : 0.;
       res.emplace_back(k);
     }
 
@@ -114,7 +123,7 @@ namespace mu2e {
                         GenId::MuCapGammaRayGenTool,
                         pos,
                         d.fourmom,
-                        stop.t + d.timeDelay);
+                        d.productionTime(stop.t));
     }
   }
 

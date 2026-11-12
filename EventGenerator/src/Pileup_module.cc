@@ -198,7 +198,7 @@ namespace mu2e {
                            d.pdgId,
                            mustop->endPosition() + d.positionOffset,
                            d.fourmom,
-                           time + d.timeDelay
+                           d.productionTime(time)
                            );
 
     }

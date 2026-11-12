@@ -1,6 +1,7 @@
 #ifndef EventGenerator_ParticleGeneratorTool_hh
 #define EventGenerator_ParticleGeneratorTool_hh
 
+#include <cmath>
 #include <memory>
 #include <vector>
 #include <string>
@@ -31,6 +32,20 @@ namespace mu2e {
       CLHEP::HepLorentzVector fourmom;
       CLHEP::Hep3Vector positionOffset{0., 0., 0.}; // production point relative to the muon stop (mm), e.g. a displaced decay
       double timeDelay = 0.; // production time relative to the muon decay/capture time (ns)
+      // If > 0, the caller folds the final production time (base time + timeDelay) into
+      // [0, timeFoldPeriod) (ns), e.g. the micropulse period for a long-lived emitter at a
+      // constant, bunch-uncorrelated rate
+      double timeFoldPeriod = 0.;
+
+      // Final production time for the given base time (decay/capture or stop time), folded into
+      // [0, timeFoldPeriod) if timeFoldPeriod > 0. Use this rather than baseTime + timeDelay.
+      double productionTime(double baseTime) const {
+        const double t = baseTime + timeDelay;
+        if (timeFoldPeriod <= 0.) return t;
+        double r = std::fmod(t, timeFoldPeriod); // same sign as t
+        if (r < 0.) r += timeFoldPeriod;
+        return (r >= timeFoldPeriod) ? 0. : r;   // tiny negative r + period can round to period
+      }
     };
 
     virtual void finishInitialization(art::RandomNumberGenerator::base_engine_t& eng, const std::string& materialName,
