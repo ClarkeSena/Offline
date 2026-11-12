@@ -46,8 +46,11 @@ common_training_config : { # Common training configuration for all particles
                 "MDC2025au", # TargetStops1809
                 "MDC2025av", # Neutrals
                 "MDC2025sc", # TargetStops347 (BeamTo2VD347, from TargetStopsCat MDC2025ac)
-                "MDC2025sc"  # TargetStops844 (BeamTo2VD844, from TargetStopsCat MDC2025ac)
+                "MDC2025sd"  # TargetStops844 (BeamTo2VD844 844+1014 keV, grim s7_u844 run 1213, from TargetStopsCat MDC2025ac)
                 ]
+  # TargetStops844 844-only alternative (grim s6_u844 run 1212, made before the 1014.52 keV line was added):
+  # set the last entry back to "MDC2025sc" AND use the single-line peak tags in pdg_22.TargetStops844 below.
+  # The two are changed together so the 844-only and the 844+1014 file names (summary, hit dump, models) never collide.
   # Run number for the Mu2e-convention sequencer field, zero-padded to 6 digits in every generated
   # file name (e.g. "001200"). Paired there with the 8-digit dataSourceTag enumeration. Required.
   runNumber : 1430
@@ -424,18 +427,21 @@ particle_training_config : {
     }
     # 843.8 keV from 27Mg beta decay after capture (BeamTo2VD844.fcl). The 27Mg lifetime is folded
     # into one micropulse, so the line is ~uniform in time rather than prompt.
-    # NOTE 2026-11-10: BeamTo2VD844.fcl now also emits the 1014.52 keV line of the same 27Mg decay. Samples made
-    # after that contain two lines: when training on one, extend the tags together to
-    # [0.84376, 1.01452] / [0.001, 0.001]. Not done yet because the existing MDC2025sc (s6) samples have only 844,
-    # and a tag with no events in its window should not be trained.
+    # Since 2026-11-10 BeamTo2VD844.fcl also emits the 1014.52 keV line of the same 27Mg decay, so the
+    # regenerated sample (grim s7_u844, versionTag MDC2025sd) has two lines: label 1 = 843.76 keV,
+    # label 2 = 1014.52 keV (windows disjoint).
+    # 844-only alternative for the older s6_u844 / MDC2025sc sample (a tag with no events in its window
+    # should not be trained), together with versionTag "MDC2025sc" above:
+    #   SBDMpeakTagCenters :    [0.84376] # MeV/c, raw pTotal
+    #   SBDMpeakTagHalfWidths : [0.001]   # +/- 1 keV
     TargetStops844 : {
       SBDMmomentumBasis : "V3_PTOT_SLOPES_ASINH_TIME_ASINH"
       SBDMpositionBasis : "V2_ATANH_SQRT"
       @table::common_avg_structure_2_stage_config
       @table::schedule_small_sample
       @table::peaksampling_off
-      SBDMpeakTagCenters :    [0.84376] # MeV/c, raw pTotal
-      SBDMpeakTagHalfWidths : [0.001]   # +/- 1 keV
+      SBDMpeakTagCenters :    [0.84376, 1.01452] # MeV/c, raw pTotal
+      SBDMpeakTagHalfWidths : [0.001,   0.001]   # +/- 1 keV each
     }
     # hard to produce samples for the same POT, single stage sufficient
     Neutrals : {
