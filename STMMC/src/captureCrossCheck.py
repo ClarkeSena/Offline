@@ -53,7 +53,7 @@ def mean_err(xs):
 
 def ratio(g, m):
     r = g[0] / m[0]
-    return (r, r * math.hypot(g[1] / g[0] if g[0] else 0., m[1] / m[0]))
+    return (r, abs(r) * math.hypot(g[1] / g[0] if g[0] else 0., m[1] / m[0]))
 
 
 def main(files):
