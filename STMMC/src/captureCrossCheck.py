@@ -32,6 +32,9 @@ from analyseCaptureDump import MATERIAL, ion_name
 E_XRAY = 334.673    # keV, Geant4 Al 2p-1s
 E_1809 = 1808.73    # keV, 26Mg 2+ -> 0+
 WIN_1809 = 1.0      # keV
+# The 1809 keV gamma is emitted by a recoiling 26Mg and is Doppler broadened by up to ~10 keV, so the yield is
+# also taken in a +-20 keV window minus the continuum in the two 20 keV sidebands either side (same total width).
+WIN_WIDE = 20.0     # keV
 IG_844 = 0.718      # 27Mg beta decay, I_gamma(843.76 keV)
 MG26, MG27 = 1000120260, 1000120270
 
@@ -65,7 +68,7 @@ def main(files):
 
     nstop = len(stops)
     ndio = ncap = nneither = nnoion = nmg26 = nmg27 = 0
-    xrays, neutrons, g1809 = [], [], []
+    xrays, neutrons, g1809, g1809w = [], [], [], []
     g1809_other = collections.Counter()     # 1809 gammas in capture stops from models other than NuclearCapture
     lines_mg26, lines_all = collections.Counter(), collections.Counter()
     mg26_with_1809 = 0
@@ -87,6 +90,8 @@ def main(files):
         neutrons.append(sum(1 for p, _ in cap if p == 2112))
         gam = [e for p, e in cap if p == 22]
         g1809.append(sum(1 for e in gam if abs(e - E_1809) < WIN_1809))
+        g1809w.append(sum(1 for e in gam if abs(e - E_1809) < WIN_WIDE)
+                      - sum(1 for e in gam if WIN_WIDE <= abs(e - E_1809) < 2 * WIN_WIDE))
         for p, m, e in parts:
             if p == 22 and m != "NuclearCapture" and abs(e - E_1809) < WIN_1809:
                 g1809_other[m] += 1
@@ -102,7 +107,8 @@ def main(files):
         ("cap_per_stop", "captures / (captures + DIO)", frac(ncap, ncap + ndio), (0.609, 0.001)),
         ("n_per_cap", "neutrons / capture (mean)", mean_err(neutrons), (1.262, 0.059)),
         ("xray_per_stop", "Al 2p-1s X-rays (334.673) / stop", mean_err(xrays), (0.798, 0.008)),
-        ("g1809_per_cap", "1808.7 keV gammas / capture", mean_err(g1809), (0.51, 0.05)),
+        ("g1809_per_cap", "1808.7 keV gammas / capture (+-1 keV)", mean_err(g1809), (0.51, 0.05)),
+        ("g1809w_per_cap", "1808.7 keV gammas / capture (+-20 keV - sidebands)", mean_err(g1809w), (0.51, 0.05)),
         ("mg26_per_cap", "26Mg / capture", frac(nmg26, ncap), (0.53, 0.05)),
         ("mg27_per_cap", "27Mg / capture", mg27, (0.0990, 0.0033)),
         ("g844_per_cap", "844 keV / capture (=27Mg x 0.718, decay not in dump)",
