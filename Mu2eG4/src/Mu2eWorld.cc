@@ -44,6 +44,7 @@
 #include "Offline/Mu2eG4/inc/constructSaddles.hh"
 #include "Offline/Mu2eG4/inc/constructServicesGeom.hh"
 #include "Offline/Mu2eG4/inc/constructTSdA.hh"
+#include "Offline/Mu2eG4/inc/constructRun1BTarget.hh"
 #include "Offline/Mu2eG4/inc/constructMBS.hh"
 #include "Offline/Mu2eG4/inc/constructVirtualDetectors.hh"
 #include "Offline/Mu2eG4/inc/constructVirtualDetectorSDs.hh"
@@ -256,6 +257,10 @@ namespace mu2e {
 
     if ( _config.getBool("hasTSdA",false) ) {
       constructTSdA(_config);
+    }
+
+    if ( _config.getBool("hasRun1BTarget",false) ) {
+      constructRun1BTarget(_config);
     }
 
     if ( _config.getBool("hasMBS",false) ) {

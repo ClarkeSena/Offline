@@ -1,0 +1,26 @@
+// Run1B with the simplified movable ("hanging") target from the engineering
+// CAD (HangingTarget_v19), plate CLOSED (in the beam), DS off.
+//
+// Based on geom_run1_b_v40.txt. The v40 stand-ins for the target, the
+// pion degrader used as a 1.75 cm Al disk at z 4235 and the TSdA used as a
+// 1.75 cm Al plate at z 4186-4204, occupy the same space as the new
+// hardware (z 4182-4239), so both are switched off here.
+// Everything else is v40 / Run 1A.
+//
+// Select it in a job with
+//   services.GeometryService.inputFile : "Offline/Mu2eG4/geom/geom_run1_b_hangingTarget_v01.txt"
+//
+#include "Offline/Mu2eG4/geom/geom_run1_b_v40.txt"
+
+bool degrader.build = false;
+bool hasTSdA        = false;
+
+bool hasRun1BTarget = true;
+#include "Offline/Mu2eG4/geom/Run1BHangingTarget_v01.txt"
+
+double run1bTarget.travel = 0.; // closed: plate in the beam
+
+// This tells emacs to view this file in c++ mode.
+// Local Variables:
+// mode:c++
+// End:

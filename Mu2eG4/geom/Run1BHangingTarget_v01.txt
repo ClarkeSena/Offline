@@ -1,0 +1,202 @@
+//
+// Run 1B movable ("hanging") target, simplified model.
+// Built by Mu2eG4/src/constructRun1BTarget.cc when hasRun1BTarget is true.
+//
+// Source: New_Target/Run1B_target_simplified_{closed,open}.gdml, made from the
+// engineering CAD HangingTarget_v19 (see the handoff note in New_Target/).
+// Six solids: a 540 x 540 x 17.5 mm Al plate, the top and bottom McMaster
+// 10135A71 tracks, two 10135A81 trolleys (box body + two polycone wheels) and
+// the south and north hanger plates. Screws, bolts, holes, brackets, pulleys
+// and lines are left out.
+//
+// Local frame (same as the GDML): origin on the TS5 axis at the downstream
+// face of the TS5 downstream end wall, z downstream, y up. In Mu2e coordinates
+// that origin is (TS5 x, 0, TS5 z + TS5 halfLength), read from the Beamline
+// geometry at run time (x = -3904, z = 4179 for TransportSolenoid_v08). The
+// parts are placed directly in DS2Vacuum, whose upstream face is that plane.
+//
+// x positions below are CAD x. The placed x is
+//    plate, trolleys, hangers : parkDir * (xCAD + travel)
+//    tracks                   : parkDir *  xCAD
+// and the x offsets inside the hanger and trolley unions are multiplied by
+// parkDir. parkDir = -1 reproduces the CAD; +1 is its mirror image.
+// The park side in Mu2e x is NOT yet confirmed by engineering.
+//
+// All lengths in mm.
+//
+
+// Position: 0 = closed, plate in the beam (Run 1B); 540 = open, parked (Run 1A)
+double run1bTarget.travel  = 0.;
+double run1bTarget.parkDir = -1.;
+
+// Optional shifts of the whole assembly relative to the frame origin above
+double run1bTarget.xOffset = 0.;
+double run1bTarget.zOffset = 0.;
+
+// Materials. The plate uses StoppingTarget_Al, as the v40 plate did, so the
+// standard stopped-muon filters (stoppingMaterial) record stops in it.
+string run1bTarget.plate.materialName   = "StoppingTarget_Al";
+string run1bTarget.track.materialName   = "StainlessSteel316";
+string run1bTarget.trolley.materialName = "StainlessSteel316";
+string run1bTarget.hanger.materialName  = "Al6061";
+
+bool run1bTarget.visible = true;
+bool run1bTarget.solid   = false;
+int  run1bTarget.verbosityLevel = 0;
+
+// ---- Plate: extruded along z, R100 corners, z 18.16 to 35.66
+double run1bTarget.plate.halfThickness = 8.75;
+double run1bTarget.plate.xCAD = 0.;
+double run1bTarget.plate.y    = 0.;
+double run1bTarget.plate.z    = 26.91;
+
+// ---- Tracks: profile in (U = across, V = absolute y), extruded along the
+// travel direction, then rotated 90 deg about y so U lies along z.
+double run1bTarget.trackTop.halfLength    = 495.65;
+double run1bTarget.trackTop.xCAD          = 219.35;
+double run1bTarget.trackTop.z             = 33.494;
+double run1bTarget.trackBottom.halfLength = 478.15;
+double run1bTarget.trackBottom.xCAD       = 201.85;
+double run1bTarget.trackBottom.z          = 22.2;
+
+// ---- Trolleys: box body plus two wheels (polycone, axis along z)
+vector<double> run1bTarget.trolley.bodyHalfDims = { 37.15, 12.065, 8.65 };
+double run1bTarget.trolley.wheel.xOffset = 25.08;  // from body centre, times parkDir
+double run1bTarget.trolley.wheel.yOffset = 0.001;
+vector<double> run1bTarget.trolley.xCAD  = { -100., 100. }; // south, north
+double run1bTarget.trolley.y = 340.615;
+double run1bTarget.trolley.z = 33.5;
+
+// ---- Hanger plates: unions of boxes. Box 0 is the union reference and is
+// placed at (parkDir*(xCAD+travel), y, z). Offsets are box centres relative
+// to box 0 (x times parkDir). Triplets (x, y, z).
+int run1bTarget.hangerS.nBoxes = 4;
+vector<double> run1bTarget.hangerS.boxHalfDims = {
+  25., 20.625,  3.,
+  25., 13.75,   4.,
+  25.,  3.25,  14.1,
+   8., 11.,     5.3
+};
+vector<double> run1bTarget.hangerS.boxOffsets = {
+    0.,  0.,     0.,
+    0., 25.375,  7.,
+    0., 42.375, -3.1,
+  -23., 50.375, 15.6
+};
+double run1bTarget.hangerS.xCAD = -100.;
+double run1bTarget.hangerS.y    = 248.625;
+double run1bTarget.hangerS.z    = 38.7;
+
+int run1bTarget.hangerN.nBoxes = 5;
+vector<double> run1bTarget.hangerN.boxHalfDims = {
+  25.,  20.625,  3.,
+  25.,  13.75,   4.,
+  25.,   3.25,  19.25,
+  25.,   4.8,    3.6,
+   7.5,  4.5,    7.75
+};
+vector<double> run1bTarget.hangerN.boxOffsets = {
+   0.,  0.,      0.,
+   0., 25.375,   7.,
+   0., 42.375,  -8.25,
+  35., 37.975, -29.1,
+  17.5, 40.875, -24.95
+};
+double run1bTarget.hangerN.xCAD = 100.;
+double run1bTarget.hangerN.y    = 248.625;
+double run1bTarget.hangerN.z    = 38.7;
+
+// ---- Vertex lists and wheel profile, transcribed from the GDML
+// Plate_s: 48 vertices, half length 8.75
+int run1bTarget.plate.nVertices = 48;
+vector<double> run1bTarget.plate.outlineU = {
+  170.0, 184.2315, 198.1733, 211.5415, 224.0641, 235.4861, 245.575, 254.1254,
+  260.9632, 265.9493, 268.9821, 270.0, 270.0, 268.9821, 265.9493, 260.9632,
+  254.1254, 245.575, 235.4861, 224.0641, 211.5415, 198.1733, 184.2315, 170.0,
+  -170.0, -184.2315, -198.1733, -211.5415, -224.0641, -235.4861, -245.575, -254.1254,
+  -260.9632, -265.9493, -268.9821, -270.0, -270.0, -268.9821, -265.9493, -260.9632,
+  -254.1254, -245.575, -235.4861, -224.0641, -211.5415, -198.1733, -184.2315, -170.0
+};
+vector<double> run1bTarget.plate.outlineV = {
+  270.0, 268.9821, 265.9493, 260.9632, 254.1254, 245.575, 235.4861, 224.0641,
+  211.5415, 198.1733, 184.2315, 170.0, -170.0, -184.2315, -198.1733, -211.5415,
+  -224.0641, -235.4861, -245.575, -254.1254, -260.9632, -265.9493, -268.9821, -270.0,
+  -270.0, -268.9821, -265.9493, -260.9632, -254.1254, -245.575, -235.4861, -224.0641,
+  -211.5415, -198.1733, -184.2315, -170.0, 170.0, 184.2315, 198.1733, 211.5415,
+  224.0641, 235.4861, 245.575, 254.1254, 260.9632, 265.9493, 268.9821, 270.0
+};
+
+// TrackTop_s: 87 vertices, half length 495.65
+int run1bTarget.trackTop.nVertices = 87;
+vector<double> run1bTarget.trackTop.outlineU = {
+  -12.9281, -12.652, -9.2631, -8.1854, -11.7881, -12.0697, -12.5337, -13.0265,
+  -13.5235, -14.1497, -14.5615, -17.649, -18.094, -18.4614, -18.851, -18.9955,
+  -19.0439, -19.0439, -18.9907, -18.8323, -18.5723, -18.2164, -17.5208, -16.6627,
+  -15.6852, -14.9912, -14.2814, 14.2936, 15.0034, 15.6973, 16.3599, 16.9764,
+  17.7847, 18.418, 18.8445, 19.0427, 19.0439, 18.9472, 18.7558, 18.4735,
+  17.8928, 14.5736, 14.306, 13.8569, 13.2051, 12.8726, 12.3867, 11.9377,
+  11.6701, 8.1976, 9.2752, 12.6641, 12.9402, 13.3035, 13.618, 16.7411,
+  17.018, 17.2394, 17.4581, 17.5321, 17.5321, 17.4959, 17.3882, 17.2114,
+  16.9693, 16.4963, 15.9128, 15.2481, 14.5356, -14.2814, -14.7641, -15.236,
+  -15.9007, -16.4842, -16.9572, -17.1992, -17.3761, -17.4838, -17.5199, -17.5117,
+  -17.4459, -17.2273, -17.0058, -16.7289, -13.6059, -13.4376, -13.2402
+};
+vector<double> run1bTarget.trackTop.outlineV = {
+  320.5979, 320.7438, 324.13, 323.0524, 319.4849, 319.3079, 319.1258, 319.0515,
+  319.0888, 319.3079, 319.5887, 322.6674, 323.1809, 323.7526, 324.6932, 325.3572,
+  326.035, 358.7375, 359.4473, 360.1413, 360.8039, 361.4203, 362.2287, 362.8619,
+  363.2884, 363.4468, 363.5, 363.5, 363.4468, 363.2884, 363.0284, 362.6725,
+  361.9768, 361.1187, 360.1413, 359.0934, 325.6953, 325.0226, 324.3707, 323.7526,
+  322.9162, 319.5887, 319.3911, 319.1749, 319.0515, 319.064, 319.1749, 319.3911,
+  319.5887, 323.0524, 324.13, 320.7438, 320.5979, 320.5979, 320.7795, 323.9142,
+  324.2841, 324.6897, 325.3466, 326.035, 358.7375, 359.2202, 359.6921, 360.1426,
+  360.5618, 361.1115, 361.5421, 361.8321, 361.9669, 361.976, 361.9398, 361.8321,
+  361.5421, 361.1115, 360.5618, 360.1426, 359.6921, 359.2202, 358.7375, 325.804,
+  325.3466, 324.6897, 324.2841, 323.9142, 320.7795, 320.6553, 320.5862
+};
+
+// TrackBottom_s: 89 vertices, half length 478.15
+int run1bTarget.trackBottom.nVertices = 89;
+vector<double> run1bTarget.trackBottom.outlineU = {
+  -18.8449, -18.9585, -19.05, -19.0271, -18.8449, -18.5876, -18.2474, -17.6551,
+  -14.5277, -14.0662, -13.55, -13.1158, -12.6816, -12.264, -11.8793, -11.542,
+  -8.1915, -9.2691, -12.6706, -12.9789, -13.3195, -13.612, -16.7909, -17.1436,
+  -17.3866, -17.4638, -17.526, -17.526, -17.5104, -17.3866, -17.1436, -16.7909,
+  -16.342, -15.8141, -15.3772, -14.9193, -14.2875, 14.2875, 14.9193, 15.3772,
+  15.8141, 16.342, 16.7909, 17.1436, 17.2795, 17.4638, 17.5104, 17.526,
+  17.4638, 17.2795, 17.0619, 16.7909, 13.612, 13.3195, 12.9789, 12.6706,
+  9.2691, 8.1915, 11.542, 11.8793, 12.264, 12.7896, 13.3339, 13.7619,
+  14.3523, 14.6896, 17.969, 18.4876, 18.6875, 18.9017, 19.0271, 19.05,
+  18.9585, 18.6875, 18.2474, 17.969, 17.3088, 16.5325, 15.67, 14.7543,
+  -14.2875, -15.2166, -15.89, -16.5325, -16.9334, -17.3088, -17.969, -18.2474,
+  -18.5876
+};
+vector<double> run1bTarget.trackBottom.outlineV = {
+  -338.07, -337.6166, -336.6875, -303.5182, -302.6025, -301.9512, -301.3391, -300.6174,
+  -297.5052, -297.2161, -297.0428, -297.0, -297.0428, -297.1694, -297.3751, -297.6519,
+  -301.0024, -302.08, -298.6833, -298.5375, -298.5542, -298.7295, -301.9305, -302.4584,
+  -303.0449, -303.3532, -303.985, -336.6875, -337.0049, -337.6276, -338.2141, -338.742,
+  -339.1909, -339.5436, -339.733, -339.8638, -339.926, -339.926, -339.8638, -339.733,
+  -339.5436, -339.1909, -338.742, -338.2141, -337.9268, -337.3193, -337.0049, -303.985,
+  -303.3532, -302.7457, -302.3221, -301.9305, -298.7295, -298.5542, -298.5375, -298.6833,
+  -302.08, -301.0024, -297.6519, -297.3751, -297.1694, -297.0267, -297.0107, -297.0958,
+  -297.3751, -297.6519, -300.9637, -301.74, -302.1625, -302.8292, -303.5182, -336.6875,
+  -337.6166, -338.51, -339.3334, -339.7088, -340.369, -340.8877, -341.2449, -341.4271,
+  -341.45, -341.3585, -341.1662, -340.8877, -340.6474, -340.369, -339.7088, -339.3334,
+  -338.7213
+};
+
+int run1bTarget.trolley.wheel.nPlanes = 22;
+vector<double> run1bTarget.trolley.wheel.z = {
+  -14.920, -14.150, -13.400, -12.650, -11.900, -11.150, -10.400, -10.000, -10.000, -8.500, -8.500,
+  8.700, 8.700, 10.000, 10.000, 10.600, 11.350, 12.100, 12.850, 13.600, 14.350, 14.920
+};
+vector<double> run1bTarget.trolley.wheel.rOut = {
+  15.8, 17.1, 18.06, 18.39, 18.42, 18.15, 17.4, 15.4, 12.07, 12.07, 3.56,
+  3.56, 12.07, 12.07, 15.4, 17.69, 18.26, 18.44, 18.34, 17.9, 16.5, 14.9
+};
+
+// This tells emacs to view this file in c++ mode.
+// Local Variables:
+// mode:c++
+// End:

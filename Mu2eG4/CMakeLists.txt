@@ -39,6 +39,7 @@ cet_make_library(
       src/constructPSEnclosure.cc
       src/constructPSShield.cc
       src/constructPTM.cc
+      src/constructRun1BTarget.cc
       src/constructSaddles.cc
       src/constructServicesGeom.cc
       src/constructSTM.cc

@@ -1,0 +1,10 @@
+// Run1B hanging target, plate OPEN (parked 540 mm off axis) for DS-on running.
+// Same as geom_run1_b_hangingTarget_v01.txt otherwise.
+#include "Offline/Mu2eG4/geom/geom_run1_b_hangingTarget_v01.txt"
+
+double run1bTarget.travel = 540.; // open: plate parked out of the beam
+
+// This tells emacs to view this file in c++ mode.
+// Local Variables:
+// mode:c++
+// End:

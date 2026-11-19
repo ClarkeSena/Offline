@@ -1,0 +1,20 @@
+//
+// G4 surface (overlap) check of the Run1B hanging target volumes only,
+// closed position. For the open position, change the include to
+// geom_run1_b_ds_on_hangingTarget_v01.txt.
+// verbosityLevel 1 also prints each part's position in Mu2e and its mass.
+//
+#include "Offline/Mu2eG4/geom/geom_run1_b_hangingTarget_v01.txt"
+
+bool run1bTarget.doSurfaceCheck = true;
+int  run1bTarget.verbosityLevel = 1;
+
+// number of random points on the volume surface
+int  g4.nSurfaceCheckPointsPercmsq =   1;
+int  g4.minSurfaceCheckPoints      = 100000; // per volume
+int  g4.maxSurfaceCheckPoints = 10000000; // per volume
+
+// This tells emacs to view this file in c++ mode.
+// Local Variables:
+// mode:c++
+// End:
