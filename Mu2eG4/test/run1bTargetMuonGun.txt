@@ -1,0 +1,34 @@
+//
+// Muon gun for the Run1B hanging target smoke test
+// (Mu2eG4/fcl/run1bTargetMuonGun.fcl).
+// mu- along +z on the TS5 axis, starting in DS2Vacuum 6 mm downstream of
+// its front (z 4179) and 12 mm upstream of the plate face (z ~4197),
+// spread over a 200 x 200 mm square that lies fully on the plate.
+// 30-100 MeV/c flat: below ~80 MeV/c a mu- should range out in the
+// 17.5 mm Al plate when it is closed.
+//
+bool particleGun.do = true;
+int  particleGun.id = 13;
+
+double particleGun.czmin = 1.0;
+double particleGun.czmax = 1.0;
+double particleGun.phimin = 0.0;
+double particleGun.phimax = 6.283185307179586;
+
+double particleGun.tmin = 0.;
+double particleGun.tmax = 0.;
+
+vector<double> particleGun.point      = { -3904., 0., 4185. };
+vector<double> particleGun.halfLength = { 100., 100., 0. };
+
+double particleGun.pmin = 30.;  // MeV/c
+double particleGun.pmax = 100.; // MeV/c
+
+double particleGun.mean = -1;
+bool   particleGun.doHistograms = false;
+bool   particleGun.verbose = false;
+
+// This tells emacs to view this file in c++ mode.
+// Local Variables:
+// mode:c++
+// End:

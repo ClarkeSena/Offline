@@ -1,0 +1,54 @@
+#
+# Smoke test of the Run1B hanging target, plate CLOSED: shoot mu- at the
+# plate and count where they stop. No output art file.
+#   PlateMuonFinder : stops in 1B_StoppingTarget_Al (the plate)
+#   AllMuonFinder   : all mu- stops; histogram stopmat = stops per material
+# Open position: run1bTargetMuonGun_open.fcl.
+#
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardProducers.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : Run1BTargetMuGun
+
+source : {
+  module_type : EmptyEvent
+  maxEvents   : 1000
+}
+
+services : @local::Services.Sim
+
+physics : {
+  producers : {
+    generate : @local::generate
+    g4run    : @local::mu2eg4runDefaultSingleStage
+    PlateMuonFinder : {
+      module_type      : StoppedParticlesFinder
+      particleInput    : "g4run"
+      physVolInfoInput : "g4run"
+      particleTypes    : [ 13 ]
+      stoppingMaterial : "1B_StoppingTarget_Al"
+      verbosityLevel   : 1
+    }
+    AllMuonFinder : {
+      module_type      : StoppedParticlesFinder
+      particleInput    : "g4run"
+      physVolInfoInput : "g4run"
+      particleTypes    : [ 13 ]
+      stoppingMaterial : ""
+      vetoedMaterials  : []
+      verbosityLevel   : 1
+    }
+  }
+  p1 : [ generate, g4run, PlateMuonFinder, AllMuonFinder ]
+  trigger_paths : [ p1 ]
+}
+
+physics.producers.generate.inputfile : "Offline/Mu2eG4/test/run1bTargetMuonGun.txt"
+
+services.GeometryService.inputFile  : "Offline/Mu2eG4/geom/geom_run1_b_hangingTarget_v01.txt"
+services.GeometryService.bFieldFile : "Offline/Mu2eG4/geom/bfgeom_DSOff.txt"
+services.TFileService.fileName      : "nts.run1bTargetMuonGun.closed.root"
+
+services.SeedService.baseSeed         : 8
+services.SeedService.maxUniqueEngines : 20

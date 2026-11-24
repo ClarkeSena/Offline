@@ -1,0 +1,7 @@
+#
+# G4 overlap check of the Run1B hanging target volumes (open position).
+#
+#include "Offline/Mu2eG4/fcl/surfaceCheck.fcl"
+
+services.GeometryService.inputFile : "Offline/Mu2eG4/geom/geom_SurfaceCheck_run1_b_ds_on_hangingTarget.txt"
+services.TFileService.fileName     : "surfaceCheck_run1_b_ds_on_hangingTarget.root"

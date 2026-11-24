@@ -1,0 +1,7 @@
+#
+# Run1B hanging target smoke test, plate OPEN (parked): expect no plate stops.
+#
+#include "Offline/Mu2eG4/fcl/run1bTargetMuonGun.fcl"
+
+services.GeometryService.inputFile : "Offline/Mu2eG4/geom/geom_run1_b_ds_on_hangingTarget_v01.txt"
+services.TFileService.fileName     : "nts.run1bTargetMuonGun.open.root"
