@@ -1,7 +1,8 @@
 #
 # Smoke test of the Run1B hanging target, plate CLOSED: shoot mu- at the
 # plate and count where they stop. No output art file.
-#   PlateMuonFinder : stops in 1B_StoppingTarget_Al (the plate)
+#   PlateMuonFinder : stops in StoppingTarget_Al (the plate, plus the v40
+#                     stopping-target foils far downstream)
 #   AllMuonFinder   : all mu- stops; histogram stopmat = stops per material
 # Open position: run1bTargetMuonGun_open.fcl.
 #
@@ -27,7 +28,7 @@ physics : {
       particleInput    : "g4run"
       physVolInfoInput : "g4run"
       particleTypes    : [ 13 ]
-      stoppingMaterial : "1B_StoppingTarget_Al"
+      stoppingMaterial : "StoppingTarget_Al"
       verbosityLevel   : 1
     }
     AllMuonFinder : {

@@ -33,9 +33,11 @@ double run1bTarget.parkDir = -1.;
 double run1bTarget.xOffset = 0.;
 double run1bTarget.zOffset = 0.;
 
-// Materials. The plate uses its own pure-Al material, 1B_StoppingTarget_Al, so
-// stops in it are kept apart from StoppingTarget_Al (set stoppingMaterial to it).
-string run1bTarget.plate.materialName   = "1B_StoppingTarget_Al";
+// Materials. The plate uses StoppingTarget_Al, as the v40 plate did, so the
+// standard stopped-muon filters (stoppingMaterial) record stops in it.
+// To tell plate stops apart from stopping-target stops, use the identical
+// pure-Al copy "1B_StoppingTarget_Al" (defined in ConstructMaterials.cc).
+string run1bTarget.plate.materialName   = "StoppingTarget_Al";
 string run1bTarget.track.materialName   = "StainlessSteel316";
 string run1bTarget.trolley.materialName = "StainlessSteel316";
 string run1bTarget.hanger.materialName  = "Al6061";
