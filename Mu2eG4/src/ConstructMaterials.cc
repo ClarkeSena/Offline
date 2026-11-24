@@ -1263,6 +1263,15 @@ namespace mu2e {
       tgt->AddMaterial(met, 1.);
     }
 
+    // Run 1B movable target plate: pure Al, kept separate from the stopping
+    // target material so stops in the plate can be told apart
+    mat = uniqueMaterialOrThrow("1B_StoppingTarget_Al");
+    {
+      G4Material* al = findMaterialOrThrow("G4_Al");
+      G4Material* plate = new G4Material(mat.name, al->GetDensity(), 1);
+      plate->AddMaterial(al, 1.);
+    }
+
     mat = uniqueMaterialOrThrow( "CarbonFiber_resin");
     {
       G4double density;

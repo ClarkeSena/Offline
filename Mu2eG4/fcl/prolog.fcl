@@ -65,7 +65,8 @@ mu2eg4DefaultPhysics: {
       "G4_Ti","G4_W","G4_W_Hayman","G4_Zn","HRSBronze",
       "Inconel718","MBSCalShieldRing","MBSSupportMix","NbTi","NbTiCu",
       "ProductionTargetTungstenLa2_O3",
-      "RackSteel","StainlessSteel","StainlessSteel316","StainlessSteel316L","StoppingTarget_Al"]
+      "RackSteel","StainlessSteel","StainlessSteel316","StainlessSteel316L","StoppingTarget_Al",
+      "1B_StoppingTarget_Al"]
     // comma separated list used when the above is set to true
     // e.g., ["StainlessSteel", "StainlessSteel316"]
 
