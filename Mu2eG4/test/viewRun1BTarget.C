@@ -1,7 +1,7 @@
 // 3D view of the Run 1B hanging target in the full Mu2e geometry.
 // Shows only the target parts (Run1BTarget*) plus nearby context: the TS5
 // downstream end wall, Collimator 5, the OPA and the DS2 rails.
-// Also prints each target part's position in the G4 world frame (mm).
+// Also prints each target part's centre (mm); in these GDML dumps that matches Mu2e coordinates.
 //
 // Make the GDML first (mu2e -c Offline/Mu2eG4/fcl/gdmldump_run1_b_hangingTarget.fcl), then
 //   root -l 'Offline/Mu2eG4/test/viewRun1BTarget.C("mu2e_run1_b_hangingTarget_closed.gdml")'
@@ -10,7 +10,6 @@
 
 #include "TEnv.h"
 #include "TGeoManager.h"
-#include "TGeoIterator.h"
 #include "TGeoMatrix.h"
 #include "TGeoNode.h"
 #include "TGeoVolume.h"
